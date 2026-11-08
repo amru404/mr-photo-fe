@@ -1,0 +1,246 @@
+@import "tailwindcss";
+
+/* Dark mode follows the .dark class next-themes puts on <html>. */
+@custom-variant dark (&:where(.dark, .dark *));
+
+/*
+ * Semantic tokens. Components use only these names (bg-surface, text-muted,
+ * border-line, bg-status-editing-soft …), never raw colours, so a rebrand or
+ * a theme is a change here and nowhere else.
+ *
+ * The studio is a darkroom: warm paper neutrals, one safelight hue at full
+ * strength only on small marks (selected frames, the active tab, progress
+ * fills) with its pale tints doing the area work. Actions are near-black,
+ * surfaces are flat and separated by a 1px line or a tone step.
+ */
+:root {
+  --ground: #f5f4f1;
+  --surface: #ffffff;
+  --raised: #eeede9;
+  --active: #e6e4df;
+  --line: #e2e0da;
+  --rule: #edebe6;
+  --control: #cfccc4;
+
+  --ink: #171614;
+  --muted: #5e5b55;
+  --faint: #6f6b64;
+
+  --primary: #171614;
+  --primary-hover: #34322e;
+  --on-primary: #ffffff;
+
+  --accent: #c8401c;
+  --accent-hover: #a83414;
+  --accent-soft: #fbefe9;
+  --accent-track: #f6d4c6;
+  --accent-ink: #7a2510;
+
+  --positive: #1f7a4c;
+  --negative: #c4242a;
+  --warning: #92400e;
+  --warning-soft: #fffaeb;
+  --warning-line: #fde68a;
+
+  --status-draft: #4a4741;
+  --status-draft-soft: #ebe9e4;
+  --status-selection: #8a4b06;
+  --status-selection-soft: #fdf1cf;
+  --status-editing: #1d4fa8;
+  --status-editing-soft: #e3ecfd;
+  --status-completed: #14532d;
+  --status-completed-soft: #dcf5e4;
+  --status-expired: #9b1c1c;
+  --status-expired-soft: #fde8e6;
+
+  /* The photo viewer is a dark room in both themes. */
+  --viewer: #0c0b0a;
+  --viewer-ink: #f3f1ed;
+  --viewer-muted: #a5a199;
+  --scrim: rgb(12 11 10 / 0.6);
+
+  --shadow-float: 0 18px 44px rgb(23 22 20 / 0.16), 0 2px 6px rgb(23 22 20 / 0.06);
+}
+
+.dark {
+  --ground: #09090a;
+  --surface: #141416;
+  --raised: #1c1c1f;
+  --active: #27272b;
+  --line: #26262a;
+  --rule: #1e1e21;
+  --control: #3a3a40;
+
+  --ink: #f4f4f5;
+  --muted: #a1a1aa;
+  --faint: #85858e;
+
+  --primary: #f4f4f5;
+  --primary-hover: #d9d9dc;
+  --on-primary: #0b0b0c;
+
+  --accent: #f07a52;
+  --accent-hover: #f6956f;
+  --accent-soft: #2c1710;
+  --accent-track: #52261a;
+  --accent-ink: #f9c3ad;
+
+  --positive: #3ecf8e;
+  --negative: #f07272;
+  --warning: #f2b862;
+  --warning-soft: #2b2010;
+  --warning-line: #5a4316;
+
+  --status-draft: #cfcbc3;
+  --status-draft-soft: #26241f;
+  --status-selection: #f2c063;
+  --status-selection-soft: #2e2410;
+  --status-editing: #95b8ff;
+  --status-editing-soft: #15223a;
+  --status-completed: #72d69d;
+  --status-completed-soft: #12291c;
+  --status-expired: #ff9191;
+  --status-expired-soft: #33161a;
+
+  --scrim: rgb(0 0 0 / 0.7);
+  --shadow-float: 0 18px 44px rgb(0 0 0 / 0.55), 0 2px 6px rgb(0 0 0 / 0.3);
+
+  color-scheme: dark;
+}
+
+@theme inline {
+  --color-ground: var(--ground);
+  --color-surface: var(--surface);
+  --color-raised: var(--raised);
+  --color-active: var(--active);
+  --color-line: var(--line);
+  --color-rule: var(--rule);
+  --color-control: var(--control);
+
+  --color-ink: var(--ink);
+  --color-muted: var(--muted);
+  --color-faint: var(--faint);
+
+  --color-primary: var(--primary);
+  --color-primary-hover: var(--primary-hover);
+  --color-on-primary: var(--on-primary);
+
+  --color-accent: var(--accent);
+  --color-accent-hover: var(--accent-hover);
+  --color-accent-soft: var(--accent-soft);
+  --color-accent-track: var(--accent-track);
+  --color-accent-ink: var(--accent-ink);
+
+  --color-positive: var(--positive);
+  --color-negative: var(--negative);
+  --color-warning: var(--warning);
+  --color-warning-soft: var(--warning-soft);
+  --color-warning-line: var(--warning-line);
+
+  --color-status-draft: var(--status-draft);
+  --color-status-draft-soft: var(--status-draft-soft);
+  --color-status-selection: var(--status-selection);
+  --color-status-selection-soft: var(--status-selection-soft);
+  --color-status-editing: var(--status-editing);
+  --color-status-editing-soft: var(--status-editing-soft);
+  --color-status-completed: var(--status-completed);
+  --color-status-completed-soft: var(--status-completed-soft);
+  --color-status-expired: var(--status-expired);
+  --color-status-expired-soft: var(--status-expired-soft);
+
+  --color-viewer: var(--viewer);
+  --color-viewer-ink: var(--viewer-ink);
+  --color-viewer-muted: var(--viewer-muted);
+  --color-scrim: var(--scrim);
+
+  --shadow-float: var(--shadow-float);
+
+  --font-sans: var(--font-geist), "Geist", ui-sans-serif, system-ui, sans-serif;
+  /* Frame numbers, filenames and counts: the marks on a film's edge. */
+  --font-mono: var(--font-geist-mono), "Geist Mono", ui-monospace, monospace;
+
+  /* Cards 12, controls 8, chips 6. Photos keep square corners. */
+  --radius-card: 12px;
+  --radius-control: 8px;
+  --radius-chip: 6px;
+
+  /* Type: title 28 · section 17 · figure 30 · body 14 · small 12. */
+  --text-title: 1.75rem;
+  --text-title--line-height: 2.125rem;
+  --text-section: 1.0625rem;
+  --text-section--line-height: 1.5rem;
+  --text-figure: 1.875rem;
+  --text-figure--line-height: 2.25rem;
+}
+
+@layer base {
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    background-color: var(--ground);
+    color: var(--ink);
+    font-family: var(--font-sans);
+    font-size: 0.875rem;
+    line-height: 1.25rem;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  ::selection {
+    background-color: var(--accent-track);
+    color: var(--ink);
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+
+  input::placeholder,
+  textarea::placeholder {
+    color: var(--faint);
+  }
+
+  /* Native date pickers follow the theme. */
+  input[type="date"]::-webkit-calendar-picker-indicator {
+    opacity: 0.6;
+  }
+  .dark input[type="date"]::-webkit-calendar-picker-indicator {
+    filter: invert(1);
+  }
+}
+
+@utility tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+@utility no-scrollbar {
+  scrollbar-width: none;
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+@utility safe-bottom {
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* The dashed walkway through the isometric studio. */
+@keyframes studio-flow {
+  to {
+    stroke-dashoffset: -12;
+  }
+}
+.studio-flow {
+  animation: studio-flow 1.2s linear infinite;
+}
