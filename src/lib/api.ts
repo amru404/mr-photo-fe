@@ -52,13 +52,15 @@ async function request<T>(method: Method, path: string, body?: unknown): Promise
   };
   const xsrf = readCookie("XSRF-TOKEN");
   if (xsrf) headers["X-XSRF-TOKEN"] = xsrf;
-  if (body !== undefined) headers["Content-Type"] = "application/json";
+  // FormData (uploads) goes as is: the browser sets the multipart boundary itself.
+  const multipart = typeof FormData !== "undefined" && body instanceof FormData;
+  if (body !== undefined && !multipart) headers["Content-Type"] = "application/json";
 
   const response = await fetch(`/api${path}`, {
     method,
     headers,
     credentials: "same-origin",
-    body: body === undefined ? undefined : JSON.stringify(body),
+    body: body === undefined ? undefined : multipart ? body : JSON.stringify(body),
   });
 
   if (response.status === 204) return undefined as T;

@@ -4,15 +4,14 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { MessageSquare, X } from "lucide-react";
-import { Button, buttonClass } from "@/components/ui/button";
+import { CircleAlert, MessageSquare, X } from "lucide-react";
 import { useConfirm } from "@/components/ui/feedback";
-import { Notice } from "@/components/ui/notice";
-import { Skeleton } from "@/components/ui/spinner";
+import { EmptyState } from "@/components/ui/notice";
 import { api, ApiError } from "@/lib/api";
+import { cn } from "@/lib/cn";
 import { count, number, plural } from "@/lib/format";
 import type { GalleryInfo, GalleryReview, GallerySubmitted } from "@/lib/types";
-import { BottomBar, GalleryFooter, GalleryHeader } from "./gallery-chrome";
+import { ActionButton, actionClass, Board, BOARD_TITLE, BottomBar, CountPill, GalleryFooter, GalleryHeader, Note, PAGE_NARROW, Placeholder } from "./gallery-chrome";
 import { galleryKey, useOnLocked } from "./use-gallery";
 
 export function ReviewSelection({ token, gallery }: { token: string; gallery: GalleryInfo }) {
@@ -75,53 +74,67 @@ export function ReviewSelection({ token, gallery }: { token: string; gallery: Ga
     <>
       <GalleryHeader brand={gallery.brand_name} title={gallery.title} back={back} />
 
-      <main className="mx-auto max-w-3xl px-4 pt-6 sm:px-6">
-        <h1 className="text-[1.625rem] font-bold leading-tight tracking-[-0.02em] text-ink">Review your selection</h1>
-        <p className="mt-1.5 text-sm text-muted">
-          Check your favorites before sending them to {gallery.brand_name}. Once sent, your selection is locked.
-        </p>
+      <main className={cn(PAGE_NARROW, "pt-5")}>
+        <Board>
+          <div className="flex flex-col gap-4 p-5 sm:flex-row sm:items-end sm:justify-between">
+            <div className="min-w-0">
+              <p className="eyebrow">Review</p>
+              <h1 className={cn(BOARD_TITLE, "mt-1.5")}>Review your selection</h1>
+              <p className="mt-1 max-w-xl text-[13px] text-muted">
+                Check your favorites before sending them to {gallery.brand_name}. Once sent, your selection is locked.
+              </p>
+            </div>
+            {!review.isPending && (
+              <div className="flex shrink-0 flex-col items-start gap-1.5 sm:items-end">
+                <p className="flex items-baseline gap-2 text-[13px] text-muted">
+                  <span className="font-mono text-figure font-medium text-ink tabular">{number(selected.length)}</span>
+                  <span>
+                    {plural(selected.length, "photo")} selected
+                    {max && <span> of {max} allowed</span>}
+                  </span>
+                </p>
+                {max && !data?.over_limit && <CountPill>{max - selected.length} left</CountPill>}
+              </div>
+            )}
+          </div>
+        </Board>
 
         {review.isPending ? (
-          <Skeleton className="mt-6 h-40 w-full" />
+          <Placeholder className="mt-4 h-40 w-full rounded-card" />
         ) : (
           <>
-            <div className="mt-5 flex items-center justify-between rounded-card border border-line bg-surface px-4 py-3">
-              <p className="text-sm text-muted">
-                <span className="text-figure font-semibold text-ink tabular">{number(selected.length)}</span> {plural(selected.length, "photo")} selected
-                {max && <span> of {max} allowed</span>}
-              </p>
-              {max && !data?.over_limit && <span className="text-xs font-medium text-muted tabular">{max - selected.length} left</span>}
-            </div>
-
             {data?.over_limit && max && (
-              <Notice tone="error" className="mt-4">
-                You&rsquo;ve selected {selected.length} photos but the limit is {max}. Remove {count(selected.length - max, "photo")} to continue.
-              </Notice>
+              <Note tone="negative" icon={<CircleAlert />} className="mt-4">
+                You&rsquo;ve selected <span className="font-mono text-ink">{selected.length}</span> photos but the limit is{" "}
+                <span className="font-mono text-ink">{max}</span>. Remove {count(selected.length - max, "photo")} to continue.
+              </Note>
             )}
             {error && (
-              <Notice tone="error" className="mt-4">
+              <Note tone="negative" icon={<CircleAlert />} className="mt-4">
                 {error}
-              </Notice>
+              </Note>
             )}
 
             {selected.length === 0 ? (
-              <div className="mt-6 rounded-card border border-line bg-surface px-6 py-14 text-center">
-                <p className="text-base font-semibold">You haven&rsquo;t picked any photos yet</p>
-                <p className="mt-1 text-sm text-muted">Go back and tap the heart on your favorites.</p>
-                <Link href={back} className={buttonClass("primary", "lg", "mt-5")}>
-                  Back to gallery
-                </Link>
-              </div>
+              <EmptyState
+                className="mt-4"
+                title="You haven’t picked any photos yet"
+                action={
+                  <Link href={back} className={actionClass("primary")}>
+                    Back to gallery
+                  </Link>
+                }
+              >
+                Go back and tap the heart on your favorites.
+              </EmptyState>
             ) : (
-              <ul className="mt-6 grid grid-cols-3 gap-2 sm:grid-cols-4">
+              <ul className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4">
                 {selected.map((photo) => (
-                  <li key={photo.id} className="min-w-0">
-                    <div className="relative aspect-square overflow-hidden bg-raised">
-                      {photo.grid_url && (
-                        <img src={photo.grid_url} alt={photo.filename} loading="lazy" className="size-full object-cover" />
-                      )}
+                  <li key={photo.id} className="min-w-0 rounded-card border border-line bg-surface p-1.5">
+                    <div className="relative aspect-square overflow-hidden rounded-[10px] bg-raised">
+                      {photo.grid_url && <img src={photo.grid_url} alt={photo.filename} loading="lazy" className="size-full object-cover" />}
                       {photo.comments_count > 0 && (
-                        <span className="absolute bottom-1.5 start-1.5 inline-flex items-center gap-1 rounded-chip bg-surface px-1.5 py-0.5 text-[11px] font-medium text-ink tabular">
+                        <span className="absolute bottom-2 start-2 inline-flex items-center gap-1 rounded-chip bg-surface/90 px-1.5 py-0.5 font-mono text-[11px] text-ink shadow-sm tabular">
                           <MessageSquare className="size-3" aria-hidden="true" />
                           {photo.comments_count}
                         </span>
@@ -132,15 +145,15 @@ export function ReviewSelection({ token, gallery }: { token: string; gallery: Ga
                           onClick={() => remove(photo.id)}
                           disabled={busy !== null}
                           aria-label={`Remove ${photo.filename}`}
-                          className="absolute end-0 top-0 flex size-11 items-start justify-end p-1.5 disabled:opacity-60"
+                          className="group/remove absolute end-0 top-0 flex size-11 items-start justify-end p-1.5 disabled:opacity-60"
                         >
-                          <span className="flex size-7 items-center justify-center rounded-full bg-surface text-ink">
+                          <span className="flex size-7 items-center justify-center rounded-full bg-surface/90 text-ink shadow-sm transition-colors group-hover/remove:bg-surface group-hover/remove:text-negative">
                             <X className="size-4" strokeWidth={2.5} />
                           </span>
                         </button>
                       )}
                     </div>
-                    <p className="mt-1 truncate text-xs text-muted" title={photo.filename}>
+                    <p className="truncate px-1 pb-0.5 pt-1.5 font-mono text-[11px] text-muted" title={photo.filename}>
                       {photo.filename}
                     </p>
                   </li>
@@ -154,14 +167,14 @@ export function ReviewSelection({ token, gallery }: { token: string; gallery: Ga
       <GalleryFooter />
 
       {selected.length > 0 && !data?.locked && (
-        <BottomBar>
-          <div className="mx-auto flex max-w-3xl items-center gap-3">
-            <Link href={back} className={buttonClass("secondary", "lg")}>
+        <BottomBar narrow>
+          <div className="flex items-center gap-2.5">
+            <Link href={back} className={actionClass("secondary")}>
               Keep browsing
             </Link>
-            <Button variant="primary" size="lg" className="flex-1" disabled={data?.over_limit} loading={busy === "submit"} onClick={() => submit(selected.length)}>
+            <ActionButton className="min-w-0 flex-1" disabled={data?.over_limit} loading={busy === "submit"} onClick={() => submit(selected.length)}>
               Send selection
-            </Button>
+            </ActionButton>
           </div>
         </BottomBar>
       )}

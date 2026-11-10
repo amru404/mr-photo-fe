@@ -3,7 +3,6 @@
 import { useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowRight, CircleCheck, Clock, Download, MessageSquare } from "lucide-react";
-import { Button } from "@/components/ui/button";
 import { CopyButton } from "@/components/ui/copy-button";
 import { useConfirm } from "@/components/ui/feedback";
 import { EmptyState, LoadError, Notice } from "@/components/ui/notice";
@@ -79,66 +78,73 @@ export function SelectionsTab({ project }: { project: ProjectDetail }) {
   const totalComments = [...lists.comments.values()].reduce((sum, list) => sum + list.length, 0);
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       {message && <Notice tone={message.tone}>{message.text}</Notice>}
 
-      {/* Summary */}
-      <section className="grid gap-px overflow-hidden rounded-card border border-line bg-line lg:grid-cols-[minmax(0,1.4fr)_repeat(2,minmax(0,1fr))]">
-        <div className="flex items-start gap-3 bg-surface p-5">
-          {project.selection_submitted_at ? (
-            <CircleCheck className="mt-0.5 size-5 shrink-0 text-positive" aria-hidden="true" />
-          ) : (
-            <Clock className="mt-0.5 size-5 shrink-0 text-status-selection" aria-hidden="true" />
-          )}
-          <div className="min-w-0">
-            <h2 className="text-section font-semibold">{project.selection_submitted_at ? "Selection submitted" : "Client is still picking"}</h2>
-            <p className="mt-0.5 text-sm text-muted">
-              {project.selection_submitted_at
-                ? `${project.client_name ?? "The client"} sent ${count(picked, "photo")} on ${dateTime(project.selection_submitted_at)}.`
-                : picked === 0
-                  ? "No photos picked yet. Picks appear here live."
-                  : `${count(picked, "photo")} picked so far; this can still change.`}
-            </p>
-            <div className="mt-4 flex flex-wrap gap-2">
-              {project.can_move_to_editing ? (
-                <Button variant="primary" size="sm" loading={busy} onClick={markEditing}>
-                  Move to Editing
-                  <ArrowRight className="size-3.5" />
-                </Button>
-              ) : (
-                <StatusBadge status={project.status} />
-              )}
+      {/* Summary deck: where the selection stands, how many, and the hand-off tools. */}
+      <section className="grid gap-px overflow-hidden rounded-card border border-line bg-rule lg:grid-cols-[minmax(0,1.4fr)_repeat(2,minmax(0,1fr))]">
+        <div className="bg-surface p-5">
+          <p className="eyebrow">Selection</p>
+          <div className="mt-2 flex items-start gap-2.5">
+            {project.selection_submitted_at ? (
+              <CircleCheck className="mt-0.5 size-4 shrink-0 text-positive" aria-hidden="true" />
+            ) : (
+              <Clock className="mt-0.5 size-4 shrink-0 text-status-selection" aria-hidden="true" />
+            )}
+            <div className="min-w-0">
+              <h2 className="text-sm font-semibold text-ink">{project.selection_submitted_at ? "Selection submitted" : "Client is still picking"}</h2>
+              <p className="mt-0.5 text-[13px] text-muted">
+                {project.selection_submitted_at
+                  ? `${project.client_name ?? "The client"} sent ${count(picked, "photo")} on ${dateTime(project.selection_submitted_at)}.`
+                  : picked === 0
+                    ? "No photos picked yet. Picks appear here live."
+                    : `${count(picked, "photo")} picked so far; this can still change.`}
+              </p>
             </div>
+          </div>
+          <div className="mt-4 flex flex-wrap gap-2 ps-[26px]">
+            {project.can_move_to_editing ? (
+              <button
+                type="button"
+                onClick={markEditing}
+                disabled={busy}
+                className="inline-flex h-9 items-center gap-2 rounded-control bg-primary px-3.5 text-[13px] font-semibold text-on-primary transition-colors hover:bg-primary-hover disabled:opacity-60"
+              >
+                {busy ? "Moving…" : "Move to Editing"}
+                <ArrowRight className="size-3.5" />
+              </button>
+            ) : (
+              <StatusBadge status={project.status} />
+            )}
           </div>
         </div>
 
         <div className="bg-surface p-5">
-          <p className="text-[13px] text-muted">Picked</p>
-          <p className="mt-1 font-mono text-figure font-medium tabular">
-            {number(picked)}
-            <span className="text-base text-faint"> / {max ?? number(project.counts.photos)}</span>
+          <p className="eyebrow">Picked</p>
+          <p className="mt-2 flex items-baseline gap-1.5 font-mono tabular">
+            <span className="text-[28px] font-medium leading-none text-ink">{number(picked)}</span>
+            <span className="text-sm text-faint">/ {max ?? number(project.counts.photos)}</span>
           </p>
           <Meter className="mt-3" value={picked} max={max ?? Math.max(project.counts.photos, 1)} label="Photos picked" />
-          <p className="mt-2 text-xs text-faint">{max ? `limit of ${max}` : "no limit set"}</p>
+          <p className="mt-2 text-xs text-faint">{max ? `Limit of ${max}` : "No limit set"}</p>
         </div>
 
         <div className="bg-surface p-5">
-          <p className="text-[13px] text-muted">Hand-off</p>
-          <div className="mt-2 flex flex-col gap-2">
-            {/* Comma-separated filenames, e.g. to paste into a Lightroom filter. */}
+          <p className="eyebrow">Hand-off</p>
+          <p className="mt-2 text-[13px] text-muted">Filenames for a Lightroom filter, or the full list as a spreadsheet.</p>
+          <div className="mt-3 flex flex-wrap gap-2">
             <CopyButton
               size="sm"
               text={data.selections.map((selection) => selection.photo.filename).join(",\n")}
               title="Copy every picked filename, comma-separated, for a Lightroom filter"
-              copiedLabel="Filenames copied"
-              className="w-full"
+              copiedLabel="Copied"
             >
               Copy filenames
             </CopyButton>
             <a
               href={`/api/projects/${project.id}/selections.csv`}
               aria-disabled={picked === 0}
-              className="inline-flex h-8 w-full items-center justify-center gap-1.5 rounded-control border border-control bg-surface px-3 text-[13px] font-medium text-ink transition-colors hover:bg-raised aria-disabled:pointer-events-none aria-disabled:opacity-50"
+              className="inline-flex h-8 items-center justify-center gap-1.5 rounded-control border border-control bg-surface px-3 text-[13px] font-medium text-ink transition-colors hover:bg-raised aria-disabled:pointer-events-none aria-disabled:opacity-50"
             >
               <Download className="size-3.5" />
               Export CSV
@@ -152,69 +158,63 @@ export function SelectionsTab({ project }: { project: ProjectDetail }) {
           Copy the client link from the top of the page and send it. Picks and comments show up here as the client works.
         </EmptyState>
       ) : (
-        <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_400px]">
+        <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,1fr)_380px]">
           {/* Contact sheet of picks */}
-          <section>
-            <div className="mb-3 flex items-baseline justify-between">
-              <h3 className="text-section font-semibold">Picks</h3>
-              <span className="font-mono text-xs text-faint">{picked}</span>
-            </div>
+          <Deck title="Picks" count={picked}>
             {picked === 0 ? (
-              <p className="rounded-card border border-dashed border-control px-5 py-8 text-center text-sm text-muted">No picks yet.</p>
+              <p className="px-5 py-10 text-center text-[13px] text-muted">No picks yet.</p>
             ) : (
-              <ol className="grid grid-cols-3 gap-x-3 gap-y-4 sm:grid-cols-4 lg:grid-cols-5 2xl:grid-cols-6">
+              <ol className="grid grid-cols-2 gap-3 p-4 sm:grid-cols-3 md:grid-cols-4 2xl:grid-cols-6">
                 {data.selections.map((selection, index) => (
-                  <li key={selection.id} className="min-w-0">
+                  <li key={selection.id} className="min-w-0 rounded-card border border-line bg-surface p-1.5 transition-colors hover:border-control">
                     <button
                       type="button"
                       onClick={() => setOpen({ list: "picks", index })}
-                      className="group relative block aspect-square w-full overflow-hidden bg-raised"
+                      className="group relative block aspect-square w-full overflow-hidden rounded-[10px] bg-raised"
                     >
                       <Thumb photo={selection.photo} className="size-full transition-transform duration-300 group-hover:scale-[1.04]" />
-                      <span className="absolute start-1.5 top-1.5 rounded-chip bg-surface px-1.5 font-mono text-[11px] font-medium text-ink">
+                      <span className="absolute start-2 top-2 rounded-[6px] bg-surface/90 px-1.5 py-0.5 font-mono text-[11px] font-medium text-ink shadow-sm">
                         {frame(index + 1, picked)}
                       </span>
                       {selection.comments.length > 0 && (
-                        <span className="absolute bottom-1.5 end-1.5 inline-flex items-center gap-1 rounded-chip bg-accent px-1.5 font-mono text-[11px] text-white">
-                          <MessageSquare className="size-3" />
+                        <span className="absolute bottom-2 end-2 inline-flex items-center gap-1 rounded-[6px] bg-surface/90 px-1.5 py-0.5 font-mono text-[11px] text-ink shadow-sm">
+                          <MessageSquare className="size-3 text-accent" />
                           {selection.comments.length}
                         </span>
                       )}
                     </button>
-                    <p className="mt-1.5 truncate font-mono text-[11px] text-muted" title={selection.photo.filename}>
-                      {selection.photo.filename}
-                    </p>
-                    {selection.selected_at && (
-                      <p className="font-mono text-[10px] text-faint" title={dateTime(selection.selected_at)}>
-                        {relative(selection.selected_at)}
+                    <div className="px-1 pb-0.5 pt-1.5">
+                      <p className="truncate text-xs font-medium text-ink" title={selection.photo.filename}>
+                        {selection.photo.filename}
                       </p>
-                    )}
+                      {selection.selected_at && (
+                        <p className="font-mono text-[11px] text-faint" title={dateTime(selection.selected_at)}>
+                          {relative(selection.selected_at)}
+                        </p>
+                      )}
+                    </div>
                   </li>
                 ))}
               </ol>
             )}
-          </section>
+          </Deck>
 
           {/* Every comment, picked or not */}
-          <section>
-            <div className="mb-3 flex items-baseline justify-between">
-              <h3 className="text-section font-semibold">Comments</h3>
-              <span className="font-mono text-xs text-faint">{totalComments}</span>
-            </div>
+          <Deck title="Comments" count={totalComments}>
             {lists.commented.length === 0 ? (
-              <p className="rounded-card border border-dashed border-control px-5 py-8 text-center text-sm text-muted">No comments yet.</p>
+              <p className="px-5 py-10 text-center text-[13px] text-muted">No comments yet.</p>
             ) : (
-              <ul className="divide-y divide-rule overflow-hidden rounded-card border border-line bg-surface">
+              <ul className="divide-y divide-rule">
                 {lists.commented.map((photo, index) => (
                   <li key={photo.id}>
-                    <button type="button" onClick={() => setOpen({ list: "comments", index })} className="flex w-full gap-3.5 p-4 text-start hover:bg-ground">
-                      <Thumb photo={photo} className="size-14 shrink-0" />
+                    <button type="button" onClick={() => setOpen({ list: "comments", index })} className="flex w-full gap-3 px-4 py-3.5 text-start transition-colors hover:bg-raised">
+                      <Thumb photo={photo} className="size-12 shrink-0 rounded-[8px]" />
                       <div className="min-w-0 flex-1">
                         <p className="flex items-center gap-2">
-                          <span className="truncate font-mono text-[13px] font-medium">{photo.filename}</span>
+                          <span className="truncate text-[13px] font-medium text-ink">{photo.filename}</span>
                           <span
                             className={cn(
-                              "shrink-0 rounded-chip px-1.5 text-[11px] font-medium",
+                              "shrink-0 rounded-chip px-1.5 py-px text-[11px] font-medium",
                               photo.is_selected ? "bg-accent-soft text-accent-ink" : "bg-raised text-muted",
                             )}
                           >
@@ -228,7 +228,7 @@ export function SelectionsTab({ project }: { project: ProjectDetail }) {
                 ))}
               </ul>
             )}
-          </section>
+          </Deck>
         </div>
       )}
 
@@ -244,6 +244,19 @@ export function SelectionsTab({ project }: { project: ProjectDetail }) {
         />
       )}
     </div>
+  );
+}
+
+/** A white deck with a title row and a mono count pill, like the Schedule columns. */
+function Deck({ title, count: total, children }: { title: string; count: number; children: React.ReactNode }) {
+  return (
+    <section className="overflow-hidden rounded-card border border-line bg-surface">
+      <header className="flex items-center justify-between gap-3 border-b border-rule px-4 py-3">
+        <h3 className="deck-title">{title}</h3>
+        <span className="min-w-8 rounded-[8px] bg-raised px-2 py-0.5 text-center font-mono text-xs text-ink tabular">{number(total)}</span>
+      </header>
+      {children}
+    </section>
   );
 }
 

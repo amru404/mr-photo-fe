@@ -29,13 +29,34 @@ export function Wordmark({ href = "/dashboard", className }: { href?: string; cl
   );
 }
 
-/** The photographer's brand on client pages: their initial in the accent. */
-export function BrandInitial({ name, className }: { name: string; className?: string }) {
+const INITIAL_SIZES = {
+  sm: "size-8 text-[13px]",
+  md: "size-9 text-sm",
+  lg: "size-14 text-xl",
+} as const;
+
+/**
+ * The photographer's brand on client pages: their initial in the accent, or
+ * (tone="ink") in an ink circle like the account avatar of the app bar.
+ */
+export function BrandInitial({
+  name,
+  className,
+  tone = "accent",
+  size = "md",
+}: {
+  name: string;
+  className?: string;
+  tone?: "accent" | "ink";
+  size?: keyof typeof INITIAL_SIZES;
+}) {
   return (
     <span
       aria-hidden="true"
       className={cn(
-        "flex size-9 shrink-0 items-center justify-center rounded-full bg-accent text-sm font-semibold text-white dark:text-on-primary",
+        "flex shrink-0 items-center justify-center rounded-full font-semibold",
+        INITIAL_SIZES[size],
+        tone === "ink" ? "bg-ink text-ground" : "bg-accent text-on-accent",
         className,
       )}
     >

@@ -1,14 +1,15 @@
 // @ts-nocheck — imperative SVG port of the isometric studio (dashboard_studio_fotografer_filter.html).
 /**
- * An isometric studio floor with six workflow stations. A photographer and a
- * client walk between them; selecting a station sends both there and plays
- * that stage's animation (shooting, typing, picking, editing, sending,
- * celebrating). React owns the selection and the counts; this owns the SVG.
+ * An isometric studio floor with five workflow stations: three along the back
+ * (Set up, Picking, Review) and two centred along the front (Editing, Done).
+ * A photographer and a client walk between them; selecting a station sends
+ * both there and plays that stage's animation (shooting, typing, picking,
+ * editing, celebrating). React owns the selection and the counts; this owns the SVG.
  */
 
 export interface StudioStation {
   label: string;
-  color: "purple" | "blue" | "teal" | "coral" | "amber" | "green";
+  color: "purple" | "blue" | "teal" | "coral" | "green";
 }
 
 export interface StudioScene {
@@ -36,13 +37,14 @@ const C = {
   LA: { t: "#FAEEDA", l: "#FAC775", r: "#EF9F27" },
 };
 
+// Back row left to right, then the front row right to left (the flow is a U).
+// The front row's two platforms sit centred under the back row's three, with the same 0.4 gap.
 const POS = [
   { x: 0.5, y: 0.7, zt: 2.0 },
   { x: 4.3, y: 0.7, zt: 1.8 },
   { x: 8.1, y: 0.7, zt: 1.2 },
-  { x: 8.1, y: 4.8, zt: 1.7 },
-  { x: 4.3, y: 4.8, zt: 1.7 },
-  { x: 0.5, y: 4.8, zt: 1.9 },
+  { x: 6.2, y: 4.8, zt: 1.7 },
+  { x: 2.4, y: 4.8, zt: 1.9 },
 ];
 
 function P(x, y, z) {
@@ -70,7 +72,7 @@ function mix(a, b, u) {
 }
 function ob(i, px, py, c) {
   if (i === 0) return box(px + 0.5, py + 0.3, Z, 1.6, 0.2, 1.3, C.W) + box(px + 0.5, py + 0.5, Z + 0.9, 1.6, 0.06, 0.4, c) + box(px + 0.5, py + 1.1, Z, 0.4, 0.4, 0.3, c) + box(px + 1.1, py + 1.1, Z, 0.4, 0.4, 0.3, C.W);
-  if (i === 1 || i === 4) { const k = i === 1 ? "scrUp" : "scrSend"; return box(px + 0.5, py + 0.8, Z, 1.6, 1.0, 0.12, C.W) + box(px + 0.5, py + 0.8, Z + 0.12, 1.6, 0.1, 0.9, c, 0, k); }
+  if (i === 1) return box(px + 0.5, py + 0.8, Z, 1.6, 1.0, 0.12, C.W) + box(px + 0.5, py + 0.8, Z + 0.12, 1.6, 0.1, 0.9, c, 0, "scrUp");
   if (i === 2) { let s = box(px + 0.3, py + 0.3, Z, 2.0, 1.5, 0.25, C.W); for (let j = 0; j < 2; j++) for (let a = 0; a < 3; a++) s += box(px + 0.4 + a * 0.62, py + 0.4 + j * 0.68, Z + 0.25, 0.5, 0.55, 0.05, C.gray, 0, "tile" + (j * 3 + a)); return s; }
   if (i === 3) return box(px + 0.3, py + 0.4, Z, 2.0, 1.3, 0.45, C.gray) + box(px + 1.2, py + 0.55, Z + 0.45, 0.2, 0.2, 0.15, C.gray) + box(px + 0.7, py + 0.5, Z + 0.6, 1.2, 0.1, 0.8, C.gray, 0, "mon") + box(px + 0.8, py + 1.0, Z + 0.45, 1.0, 0.35, 0.05, C.W);
   return box(px + 0.4, py + 0.4, Z, 1.0, 0.1, 1.2, C.W) + box(px + 0.5, py + 0.5, Z + 0.15, 0.8, 0.05, 0.9, C.gray, 0, "frA") + box(px + 1.4, py + 0.9, Z, 0.8, 0.1, 0.9, C.W) + box(px + 1.5, py + 1.0, Z + 0.12, 0.6, 0.05, 0.65, C.gray, 0, "frB");
@@ -80,12 +82,12 @@ export function mountStudio(container: HTMLElement, stations: StudioStation[], o
   const ST = stations.map((s, i) => ({ n: s.label, c: s.color, ...POS[i] }));
   const reduced = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
 
-  let o = '<svg viewBox="0 0 440 345" width="100%" style="display:block;overflow:visible" role="img" aria-label="Isometric studio with six workflow stations">';
+  let o = '<svg viewBox="0 0 440 345" width="100%" style="display:block;overflow:visible" role="img" aria-label="Isometric studio with five workflow stations">';
   o += box(0, 0, -0.3, 12.2, 9, 0.3, { t: "var(--raised)", l: "var(--line)", r: "var(--control)" });
   o += face([[0.2, 2.9, 0], [12, 2.9, 0], [12, 4.6, 0], [0.2, 4.6, 0]], "var(--active)");
   const a0 = P(0.6, AY, 0.02), a1 = P(11.6, AY, 0.02);
   o += '<line class="studio-flow" x1="' + a0[0].toFixed(1) + '" y1="' + a0[1].toFixed(1) + '" x2="' + a1[0].toFixed(1) + '" y2="' + a1[1].toFixed(1) + '" style="stroke:var(--faint);stroke-width:1.5;stroke-dasharray:5 7"/>';
-  const ord = [0, 1, 2, 3, 4, 5].sort((a, b) => (ST[a].x + ST[a].y) - (ST[b].x + ST[b].y));
+  const ord = ST.map((_, i) => i).sort((a, b) => (ST[a].x + ST[a].y) - (ST[b].x + ST[b].y));
   ord.forEach((i) => {
     const s = ST[i];
     o += '<g class="studio-clk st" data-s="' + i + '" style="cursor:pointer">' + box(s.x, s.y, 0, 3.4, 2.0, Z, C.gray, "ptop") + ob(i, s.x, s.y, C[s.c]) + "</g>";
@@ -143,7 +145,7 @@ export function mountStudio(container: HTMLElement, stations: StudioStation[], o
   }
   const ph = mkW(3.2, 2.2, "#C8401C", "#7A2510", "#2C2C2A", true, false, -1, 0.4);
   const cl = mkW(2.2, 3.6, "#378ADD", "#0C447C", "#444441", false, true, 1, 2.2);
-  function zAt(x, y) { for (let i = 0; i < 6; i++) { const s = ST[i]; if (x >= s.x && x <= s.x + 3.4 && y >= s.y && y <= s.y + 2.0) return Z; } return 0; }
+  function zAt(x, y) { for (let i = 0; i < ST.length; i++) { const s = ST[i]; if (x >= s.x && x <= s.x + 3.4 && y >= s.y && y <= s.y + 2.0) return Z; } return 0; }
   function place(w) {
     let before = null;
     for (let k = 0; k < stOrder.length; k++) {
@@ -176,7 +178,7 @@ export function mountStudio(container: HTMLElement, stations: StudioStation[], o
     if (was && !w.moving) w.wait = 1.2 + Math.random() * 2.5;
     w.z += (zAt(w.x, w.y) - w.z) * Math.min(1, dt * 14);
   }
-  const WP = [[3.2, 2.2], [7.0, 2.2], [11.1, 1.3], [10.8, 6.3], [7.0, 6.3], [3.5, 5.4], [2.2, 3.6], [5.5, 3.75], [9.0, 3.75], [1.2, 3.75], [11.2, 3.75], [10.8, 2.2], [3.2, 6.3]];
+  const WP = [[3.2, 2.2], [7.0, 2.2], [11.1, 1.3], [8.9, 6.3], [5.4, 5.4], [2.2, 3.6], [5.5, 3.75], [9.0, 3.75], [1.2, 3.75], [11.2, 3.75], [10.8, 2.2], [5.1, 6.3], [11.0, 6.3], [1.3, 6.3]];
   function wander(w) {
     const other = w === ph ? cl : ph, ot = other.path.length ? other.path[other.path.length - 1] : [other.x, other.y];
     let t = null;
@@ -204,14 +206,14 @@ export function mountStudio(container: HTMLElement, stations: StudioStation[], o
     w.jmp.setAttribute("transform", "translate(0 " + (bob - jump).toFixed(1) + ")");
     if (w.cam) w.cam.setAttribute("transform", cam ? "translate(11 -31)" : "translate(5 -19)");
   }
-  const spotPh = (i) => [[3.2, 2.2], [7.0, 2.2], [11.1, 1.3], [10.8, 6.3], [7.0, 6.3], [3.5, 5.4]][i];
-  const spotCl = (i) => [[2.2, 3.6], null, [10.8, 2.2], null, null, [3.2, 6.3]][i];
+  const spotPh = (i) => [[3.2, 2.2], [7.0, 2.2], [11.1, 1.3], [8.9, 6.3], [5.4, 5.4]][i];
+  const spotCl = (i) => [[2.2, 3.6], null, [10.8, 2.2], null, [5.1, 6.3]][i];
   const CH = [1, 0, 1, 1, 0, 1];
   let active = -1, phase = "idle", loopT = 0, shotIdx = -1, flashT = 9, T = 0, fuS = 0, cfT = 0;
   const chips = svg.querySelectorAll(".chip"), cfs = svg.querySelectorAll(".cf"), cks = svg.querySelectorAll(".ck"), flash = svg.querySelector(".flash");
   const cfd = []; for (let i = 0; i < 24; i++) cfd.push({ x: 0, y: 0, vx: 0, vy: 0, life: 0, r: 0, c: "#7F77DD" });
   const CFC = ["#7F77DD", "#1D9E75", "#D85A30", "#EF9F27", "#378ADD", "#639922", "#D4537E"];
-  const lp1 = P(ST[1].x + 1.3, ST[1].y + 1.3, 0.95), lp4 = P(ST[4].x + 1.3, ST[4].y + 1.3, 0.95);
+  const lp1 = P(ST[1].x + 1.3, ST[1].y + 1.3, 0.95);
 
   function refresh() {
     svg.querySelectorAll(".st").forEach((g) => {
@@ -262,7 +264,7 @@ export function mountStudio(container: HTMLElement, stations: StudioStation[], o
     if (cl.moving) mc = "walk";
     if (work) {
       if (active === 0) { mp = "shoot"; ph.face = -1; cl.face = 1; const si = Math.floor(loopT / 1.1); if (si !== shotIdx) { shotIdx = si; flashT = 0; } mc = shotIdx % 2 ? "out" : "wave"; }
-      else if (active === 1 || active === 3 || active === 4) { mp = "type"; ph.face = -1; }
+      else if (active === 1 || active === 3) { mp = "type"; ph.face = -1; }
       else if (active === 2) { mc = "point"; cl.face = -1; ph.face = -1; }
       else { mp = "cheer"; mc = "cheer"; ph.face = -1; cl.face = -1; }
     }
@@ -286,23 +288,21 @@ export function mountStudio(container: HTMLElement, stations: StudioStation[], o
       } else ck.style.display = "none";
     }
     setK("mon", C.gray, C.coral, work && active === 3 ? Math.min(1, (loopT % 5) / 3.5) : 0);
-    fuS += ((work && active === 5 ? 1 : 0) - fuS) * Math.min(1, dt * 4);
+    fuS += ((work && active === 4 ? 1 : 0) - fuS) * Math.min(1, dt * 4);
     setK("frA", C.gray, C.green, fuS); setK("frB", C.gray, C.green, fuS);
     setK("scrUp", C.blue, C.LB, work && active === 1 ? 0.5 + 0.5 * Math.sin(T * 8) : 0);
-    setK("scrSend", C.amber, C.LA, work && active === 4 ? 0.5 + 0.5 * Math.sin(T * 8) : 0);
     for (let i = 0; i < 5; i++) {
       const el = chips[i];
       let vis = false, x = 0, y = 0, op = 1, u;
       if (work && active === 1) { u = ((loopT + i * 0.36) % 1.8) / 1.8; x = lp1[0] + (i - 2) * 6; y = lp1[1] - u * 32; op = 1 - u; vis = true; el.style.fill = C.blue.t; el.style.stroke = C.blue.r; }
-      else if (work && active === 4) { u = ((loopT + i * 0.32) % 1.6) / 1.6; x = lp4[0] + u * 44; y = lp4[1] - u * 30 - Math.sin(Math.PI * u) * 6; op = u < 0.8 ? 1 : (1 - u) / 0.2; vis = true; el.style.fill = C.amber.t; el.style.stroke = C.amber.r; }
       el.style.display = vis ? "" : "none";
       if (vis) { el.setAttribute("transform", "translate(" + (x - 4).toFixed(1) + " " + (y - 3).toFixed(1) + ")"); el.style.opacity = op; }
     }
-    if (work && active === 5) {
+    if (work && active === 4) {
       cfT += dt;
       while (cfT > 0.07) {
         cfT -= 0.07;
-        for (let j = 0; j < 24; j++) { if (cfd[j].life <= 0) { const q0 = P(ST[5].x + 1.3, ST[5].y + 1.0, 1.8), c = cfd[j]; c.x = q0[0]; c.y = q0[1]; c.vx = (Math.random() - 0.5) * 80; c.vy = -(40 + Math.random() * 60); c.life = 1.6 + Math.random(); c.r = Math.random() * 360; c.c = CFC[j % 7]; break; } }
+        for (let j = 0; j < 24; j++) { if (cfd[j].life <= 0) { const q0 = P(ST[4].x + 1.3, ST[4].y + 1.0, 1.8), c = cfd[j]; c.x = q0[0]; c.y = q0[1]; c.vx = (Math.random() - 0.5) * 80; c.vy = -(40 + Math.random() * 60); c.life = 1.6 + Math.random(); c.r = Math.random() * 360; c.c = CFC[j % 7]; break; } }
       }
     }
     for (let j = 0; j < 24; j++) {

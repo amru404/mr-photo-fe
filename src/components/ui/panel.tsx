@@ -1,7 +1,7 @@
 import type { HTMLAttributes, ReactNode } from "react";
 import { cn } from "@/lib/cn";
 
-/** A flat white surface with a 1px edge. No shadow at rest. */
+/** A flat white deck with a 1px edge, as on the Overview. No shadow at rest. */
 export function Panel({ className, ...props }: HTMLAttributes<HTMLElement>) {
   return <section className={cn("rounded-card border border-line bg-surface", className)} {...props} />;
 }
@@ -20,8 +20,8 @@ export function PanelHeader({
   return (
     <header className={cn("flex flex-wrap items-start justify-between gap-x-4 gap-y-3 px-5 pt-5", className)}>
       <div className="min-w-0">
-        <h2 className="text-base font-semibold text-ink">{title}</h2>
-        {description && <p className="mt-1 text-sm text-muted">{description}</p>}
+        <h2 className="deck-title">{title}</h2>
+        {description && <p className="mt-1.5 text-[13px] text-muted">{description}</p>}
       </div>
       {actions && <div className="flex flex-wrap items-center gap-2">{actions}</div>}
     </header>

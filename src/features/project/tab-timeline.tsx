@@ -79,7 +79,7 @@ export function TimelineTab({ project }: { project: ProjectDetail }) {
       <form onSubmit={save} noValidate>
         <section className="overflow-hidden rounded-card border border-line bg-surface">
           <header className="px-5 pb-1 pt-5">
-            <h2 className="text-section font-semibold">{empty ? "Set up a timeline" : "Stages"}</h2>
+            <h2 className="deck-title">{empty ? "Set up a timeline" : "Stages"}</h2>
             <p className="mt-1 text-sm text-muted">
               {empty
                 ? "Choose how many days each stage gets; stages this project has already passed are marked done."
@@ -105,7 +105,7 @@ export function TimelineTab({ project }: { project: ProjectDetail }) {
                       className={cn(
                         "flex size-7 shrink-0 items-center justify-center rounded-full font-mono text-xs font-medium",
                         done && "bg-ink text-ground",
-                        isCurrent && (overdue ? "bg-negative text-white" : "bg-accent text-white"),
+                        isCurrent && (overdue ? "bg-negative text-white" : "bg-accent text-on-accent"),
                         !done && !isCurrent && "border border-control text-muted",
                       )}
                     >
@@ -183,23 +183,30 @@ function Schedule({ entries, current }: { entries: TimelineEntry[]; current?: Ti
   const now = Date.now();
   const todayAt = Math.min(1, Math.max(0, (now - start) / span));
   const last = entries[entries.length - 1];
+  // A booking whose shoot is still ahead: the timeline waits for the shoot day.
+  const waiting = entries.every((entry) => entry.state === "upcoming");
 
   return (
     <section className="rounded-card border border-line bg-surface p-5">
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <p className="font-mono text-[11px] uppercase tracking-[0.08em] text-faint">Schedule</p>
-          <h2 className="mt-0.5 text-section font-semibold">
-            {current ? `${current.label}${current.is_overdue ? " is overdue" : ` · due ${longDate(current.due_at)}`}` : "All stages done"}
+          <p className="eyebrow">Schedule</p>
+          <h2 className="mt-1 text-sm font-semibold text-ink">
+            {waiting
+              ? `Starts after the shoot · ${longDate(entries[0].starts_at)}`
+              : current
+                ? `${current.label}${current.is_overdue ? " is overdue" : ` · due ${longDate(current.due_at)}`}`
+                : "All stages done"}
           </h2>
+          {waiting && <p className="mt-0.5 text-[13px] text-muted">Nothing is due until then. Each stage begins once the one before it is done.</p>}
         </div>
         <dl className="flex gap-6 text-sm">
           <div>
-            <dt className="text-xs text-muted">Started</dt>
+            <dt className="text-xs text-muted">{waiting ? "Starts" : "Started"}</dt>
             <dd className="font-mono tabular">{shortDate(entries[0].starts_at)}</dd>
           </div>
           <div>
-            <dt className="text-xs text-muted">{current ? "Est. finish" : "Finished"}</dt>
+            <dt className="text-xs text-muted">{current || waiting ? "Est. finish" : "Finished"}</dt>
             <dd className="font-mono tabular">{shortDate(last.ends_at)}</dd>
           </div>
         </dl>
@@ -217,7 +224,7 @@ function Schedule({ entries, current }: { entries: TimelineEntry[]; current?: Ti
                 className={cn(
                   "flex min-w-0 items-center px-2.5 text-xs font-medium",
                   entry.state === "done" && "bg-ink text-ground",
-                  entry.state === "current" && (entry.is_overdue ? "bg-negative text-white" : "bg-accent text-white"),
+                  entry.state === "current" && (entry.is_overdue ? "bg-negative text-white" : "bg-accent text-on-accent"),
                   entry.state === "upcoming" && "bg-raised text-muted",
                 )}
                 style={{ flexGrow: Math.max(to - from, span * 0.04) }}

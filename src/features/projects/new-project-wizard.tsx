@@ -1,33 +1,37 @@
 "use client";
 
-import { useRouter } from "next/navigation";
+import Link from "next/link";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useMemo, useState, type ReactNode } from "react";
-import { Check, FolderCheck } from "lucide-react";
-import { BackLink, PageBody, PageHeader } from "@/components/app-shell";
+import { CalendarCheck, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { DaysPicker } from "@/components/ui/days-picker";
 import { Field, FieldError, Input, PasswordInput } from "@/components/ui/field";
-import { LoadError, Notice } from "@/components/ui/notice";
-import { Panel, PanelFooter } from "@/components/ui/panel";
-import { Pill } from "@/components/ui/pill";
+import { LoadError } from "@/components/ui/notice";
 import { Skeleton } from "@/components/ui/spinner";
 import { SwitchRow } from "@/components/ui/switch";
 import { api, ApiError } from "@/lib/api";
 import { cn } from "@/lib/cn";
 import { flash } from "@/lib/flash";
+import { paymentLabel, PaymentSlider } from "@/components/ui/payment";
 import { addDays, count, daysBetween, isoDay, longDate, number, shortDate } from "@/lib/format";
 import type { FolderPreview, Options, StageValue } from "@/lib/types";
 import { useForm } from "@/lib/use-form";
 import { useTitle } from "@/lib/use-title";
-import { DetailsFields } from "./details-fields";
+import { useClientOptions } from "@/features/clients/use-clients";
+import { detailPayload, detailValues, DetailsFields } from "./details-fields";
+import { FolderLinkField, FolderResult, FolderSkeleton, ShareWithNotice } from "./drive-folder";
 import { useOptions } from "./use-options";
 
 const STEP_FIELDS: Record<number, string[]> = {
-  1: ["title", "client_name", "client_email", "client_phone", "shoot_date", "category"],
+  1: ["title", "client_id", "category_id", "shoot_date", "shoot_time", "location", "notes"],
   2: ["drive_folder_link"],
   3: ["timeline"],
-  4: ["share_password", "share_expires_at", "max_selectable_photos", "allow_comments", "allow_download", "requires_payment"],
+  4: ["share_password", "share_expires_at", "max_selectable_photos", "allow_comments", "allow_download", "paid_percent"],
 };
+
+/** Photos are optional: a project can be just a booking until its Drive folder is connected. */
+const PHOTOS_STEP = 2;
 
 function stepOf(field: string): number {
   const root = field.split(".")[0];
@@ -39,36 +43,59 @@ export function NewProjectWizard() {
   const options = useOptions();
 
   return (
-    <PageBody width="wide">
-      <PageHeader back={<BackLink href="/projects">Projects</BackLink>} title="New project" />
-      <div className="mt-8">
+    <div className="px-4 pb-10 pt-5 sm:px-6 lg:px-10">
+      {/* The board header, as on the project page. */}
+      <section className="relative overflow-hidden rounded-board border border-line bg-surface">
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-0 opacity-60 [background-image:linear-gradient(var(--rule)_1px,transparent_1px),linear-gradient(90deg,var(--rule)_1px,transparent_1px)] [background-size:44px_44px]"
+        />
+        <div className="relative p-5">
+          <nav aria-label="Breadcrumb" className="eyebrow flex items-center gap-1.5">
+            <Link href="/projects" className="hover:text-ink">
+              Projects
+            </Link>
+            <span aria-hidden="true">/</span>
+            <span>New project</span>
+          </nav>
+          <h1 className="mt-1.5 text-xl font-semibold tracking-[-0.02em] text-ink sm:text-2xl">New project</h1>
+          <p className="mt-0.5 text-[13px] text-muted">Book a shoot for a client. Photos are optional — connect the Drive folder now or later.</p>
+        </div>
+      </section>
+
+      <div className="mt-4">
         {options.isPending ? (
-          <Skeleton className="h-96 w-full" />
+          <div className="grid gap-4 lg:grid-cols-[280px_minmax(0,1fr)]">
+            <Skeleton className="h-56 w-full rounded-card" />
+            <Skeleton className="h-96 w-full rounded-card" />
+          </div>
         ) : options.isError ? (
           <LoadError what="the project form" onRetry={() => options.refetch()} />
         ) : (
           <Wizard options={options.data} />
         )}
       </div>
-    </PageBody>
+    </div>
   );
 }
 
 function Wizard({ options }: { options: Options }) {
   const router = useRouter();
+  const params = useSearchParams();
   const steps = Object.values(options.steps);
   const [step, setStep] = useState(1);
-  const [busy, setBusy] = useState(false);
+  const [busy, setBusy] = useState<"next" | "book" | null>(null);
   const [folder, setFolder] = useState<FolderPreview | null>(null);
   const [connecting, setConnecting] = useState(false);
+  const [picked, setPicked] = useState<string | null>(null);
+  const clients = useClientOptions();
 
+  // "New project for this client" and the schedule link here with ?client_id= and ?shoot_date=.
+  const prefillDate = params.get("shoot_date") ?? "";
   const form = useForm({
-    title: "",
-    client_name: "",
-    client_email: "",
-    client_phone: "",
-    shoot_date: "",
-    category: "",
+    ...detailValues(),
+    client_id: (Number(params.get("client_id")) || "") as number | "",
+    shoot_date: /^\d{4}-\d{2}-\d{2}$/.test(prefillDate) ? prefillDate : "",
     drive_folder_link: "",
     timeline: Object.fromEntries(options.stages.map((stage) => [stage.value, stage.default_days])) as Record<StageValue, number | "">,
     share_password: "",
@@ -76,12 +103,22 @@ function Wizard({ options }: { options: Options }) {
     max_selectable_photos: "",
     allow_comments: true,
     allow_download: false,
-    requires_payment: false,
+    paid_percent: 0,
   });
   const { values } = form;
+  const clientName = clients.data?.find((client) => client.id === values.client_id)?.name ?? picked ?? "";
+
+  // Same start as the server: the shoot day when it's still ahead, otherwise today.
+  const timelineStart = useMemo(() => {
+    const today = new Date();
+    if (!values.shoot_date) return today;
+    const [y, m, d] = values.shoot_date.split("-").map(Number);
+    const shoot = new Date(y, m - 1, d);
+    return shoot > today ? shoot : today;
+  }, [values.shoot_date]);
 
   const preview = useMemo(() => {
-    let cursor = new Date();
+    let cursor = timelineStart;
     return options.stages.map((stage) => {
       const days = Math.max(0, Number(values.timeline[stage.value]) || 0);
       const startsAt = cursor;
@@ -89,37 +126,48 @@ function Wizard({ options }: { options: Options }) {
       cursor = dueAt;
       return { ...stage, startsAt, dueAt };
     });
-  }, [options.stages, values.timeline]);
+  }, [options.stages, values.timeline, timelineStart]);
 
   const totalDays = Object.values(values.timeline).reduce<number>((sum, days) => sum + (Number(days) || 0), 0);
   const last = preview[preview.length - 1];
 
-  async function connectFolder() {
+  async function connectFolder(): Promise<boolean> {
     setConnecting(true);
     try {
       const result = await api.post<{ folder: FolderPreview }>("/projects/drive-folder", { drive_folder_link: values.drive_folder_link });
       setFolder(result.folder);
+      return true;
     } catch (error) {
       setFolder(null);
       form.capture(error, "drive_folder_link");
+      return false;
     } finally {
       setConnecting(false);
     }
   }
 
-  async function next(event: React.FormEvent) {
-    event.preventDefault();
-    setBusy(true);
+  /** What the API takes: ids for the details, and the folder only once it has been connected. */
+  function payload(withFolder = true) {
+    const { title: _t, client_id: _c, category_id: _k, shoot_date: _d, shoot_time: _s, location: _l, notes: _n, drive_folder_link, ...rest } = values;
+    return {
+      ...detailPayload(values),
+      ...rest,
+      drive_folder_link: withFolder && folder ? drive_folder_link : null,
+    };
+  }
+
+  async function create(withFolder = true) {
+    const result = await api.post<{ message: string }>("/projects", payload(withFolder));
+    flash.set(result.message);
+    router.push("/projects");
+  }
+
+  async function run(kind: "next" | "book", action: () => Promise<void>) {
+    setBusy(kind);
     try {
-      if (step < steps.length) {
-        await api.post("/projects/validate-step", { step, ...values });
-        setStep(step + 1);
-      } else {
-        const result = await api.post<{ message: string }>("/projects", values);
-        flash.set(result.message);
-        router.push("/projects");
-        return;
-      }
+      await action();
+      // Creating navigates away; keep the button busy until then.
+      if (kind === "book" || step === steps.length) return;
     } catch (error) {
       form.capture(error);
       if (error instanceof ApiError && error.isValidation) {
@@ -127,123 +175,153 @@ function Wizard({ options }: { options: Options }) {
         if (first) setStep(Math.min(step, stepOf(first)));
       }
     }
-    setBusy(false);
+    setBusy(null);
+  }
+
+  async function next(event: React.FormEvent) {
+    event.preventDefault();
+    // A pasted link that wasn't connected yet is connected first, so it isn't dropped silently.
+    if (step === PHOTOS_STEP && values.drive_folder_link.trim() && !folder && !(await connectFolder())) return;
+    run("next", async () => {
+      if (step < steps.length) {
+        await api.post("/projects/validate-step", { step, ...payload() });
+        setStep(step + 1);
+      } else {
+        await create();
+      }
+    });
+  }
+
+  /** "Skip — just book": create the booking now, without photos; the folder can be connected later. */
+  function book() {
+    form.set("drive_folder_link", "");
+    setFolder(null);
+    run("book", () => create(false));
   }
 
   const timelineError = (stage: StageValue) => form.error(`timeline.${stage}`);
 
   return (
-    <div className="grid gap-8 lg:grid-cols-[240px_minmax(0,1fr)] lg:gap-10">
-      {/* Steps: a real ordered list; finished ones can be revisited. */}
-      <ol className="flex gap-2 overflow-x-auto lg:sticky lg:top-8 lg:block lg:space-y-1 lg:self-start" aria-label="Steps">
-        {steps.map((label, index) => {
-          const number = index + 1;
-          const done = number < step;
-          const current = number === step;
-          return (
-            <li key={label} className="flex-1 lg:flex-none">
-              <button
-                type="button"
-                disabled={!done}
-                onClick={() => setStep(number)}
-                aria-current={current ? "step" : undefined}
-                className={cn(
-                  "flex w-full min-w-28 items-start gap-3 rounded-control px-3 py-2.5 text-start transition-colors",
-                  current && "bg-surface ring-1 ring-line",
-                  done && "hover:bg-raised",
-                )}
-              >
-                <span
+    <div className="grid items-start gap-4 lg:grid-cols-[280px_minmax(0,1fr)]">
+      {/* Steps: a deck with a real ordered list; finished ones can be revisited. */}
+      <nav aria-label="Steps" className="rounded-card border border-line bg-surface lg:sticky lg:top-20">
+        <div className="flex items-center justify-between gap-3 border-b border-rule px-4 py-3">
+          <span className="deck-title">Steps</span>
+          <span className="font-mono text-xs text-faint tabular">
+            {step} / {steps.length}
+          </span>
+        </div>
+        <ol className="no-scrollbar flex gap-1 overflow-x-auto p-1.5 lg:block lg:space-y-1">
+          {steps.map((label, index) => {
+            const number = index + 1;
+            const done = number < step;
+            const current = number === step;
+            return (
+              <li key={label} className="min-w-36 flex-1 lg:min-w-0">
+                <button
+                  type="button"
+                  disabled={!done}
+                  onClick={() => setStep(number)}
+                  aria-current={current ? "step" : undefined}
                   className={cn(
-                    "mt-px flex size-5 shrink-0 items-center justify-center rounded-full text-[11px] font-semibold tabular",
-                    done && "bg-primary text-on-primary",
-                    current && "bg-accent text-white dark:text-on-primary",
-                    !done && !current && "border border-control text-muted",
+                    "group flex w-full items-start gap-3 rounded-[10px] px-2.5 py-2 text-start transition-colors",
+                    current && "bg-ink text-ground",
+                    done && "hover:bg-raised",
                   )}
                 >
-                  {done ? <Check className="size-3" strokeWidth={3} /> : number}
-                </span>
-                <span className="min-w-0">
-                  <span className={cn("block text-sm", current || done ? "font-medium text-ink" : "text-muted")}>{label}</span>
-                  <StepSummary step={number} done={done} values={values} folder={folder} totalDays={totalDays} />
-                </span>
-              </button>
-            </li>
-          );
-        })}
-      </ol>
+                  <span
+                    className={cn(
+                      "flex h-6 min-w-8 shrink-0 items-center justify-center rounded-[6px] px-1.5 font-mono text-[11px] tabular",
+                      current && "bg-ground/15 text-ground",
+                      done && "bg-raised text-positive group-hover:bg-active",
+                      !done && !current && "bg-raised text-muted",
+                    )}
+                  >
+                    {done ? <Check className="size-3.5" strokeWidth={3} aria-label="Done" /> : String(number).padStart(2, "0")}
+                  </span>
+                  <span className="min-w-0 pt-0.5">
+                    <span
+                      className={cn(
+                        "block truncate text-[13px] font-semibold",
+                        current ? "text-ground" : done ? "text-ink" : "text-muted",
+                      )}
+                    >
+                      {label}
+                    </span>
+                    <StepSummary step={number} done={done} title={values.title} client={clientName} folder={folder} totalDays={totalDays} />
+                  </span>
+                </button>
+              </li>
+            );
+          })}
+        </ol>
+      </nav>
 
-      <form onSubmit={next} noValidate>
-        <Panel>
-          <div className="p-5 sm:p-7">
+      <form onSubmit={next} noValidate className="min-w-0 space-y-4">
             {step === 1 && (
-              <StepIntro title="Project details" text="Who is this gallery for, and what was the shoot?">
-                <DetailsFields values={values} set={form.set} error={form.error} categories={options.categories} autoFocus />
-              </StepIntro>
+              <Deck title="Project details" text="Who is it for, and when and where is the shoot?">
+                <DetailsFields
+                  values={values}
+                  set={(key, value) => form.set(key, value as never)}
+                  error={form.error}
+                  categories={options.categories}
+                  onClient={(client) => setPicked(client?.name ?? null)}
+                  autoFocus
+                />
+              </Deck>
             )}
 
-            {step === 2 && (
-              <StepIntro title="Connect Google Drive folder" text="Paste the share link of the folder that holds this shoot's photos.">
-                <Notice tone="info">
-                  Share the folder with{" "}
-                  {options.service_account_email ? (
-                    <span className="break-all font-semibold">{options.service_account_email}</span>
-                  ) : (
-                    <span className="font-semibold">your service account email</span>
-                  )}{" "}
-                  (Viewer access is enough).
-                </Notice>
+            {step === PHOTOS_STEP && (
+              <Deck
+                title="Photos"
+                aside={<span className="font-mono text-[11px] uppercase tracking-[0.08em] text-faint">Optional</span>}
+                text="Already have this shoot's photos in Google Drive? Connect the folder now. If not, just book the shoot — you can connect the folder later from the project page."
+              >
+                <ShareWithNotice email={options.service_account_email} />
 
                 <div className="mt-6">
-                  <Field label="Drive folder link" error={form.error("drive_folder_link")}>
-                    {(id) => (
-                      <div className="flex flex-col gap-2 sm:flex-row">
-                        <Input
-                          id={id}
-                          autoFocus
-                          placeholder="https://drive.google.com/drive/folders/…"
-                          value={values.drive_folder_link}
-                          onChange={(event) => {
-                            form.set("drive_folder_link", event.target.value);
-                            setFolder(null);
-                          }}
-                          onKeyDown={(event) => {
-                            if (event.key === "Enter") {
-                              event.preventDefault();
-                              connectFolder();
-                            }
-                          }}
-                          invalid={!!form.error("drive_folder_link")}
-                        />
-                        <Button className="h-10" loading={connecting} onClick={connectFolder}>
-                          {connecting ? "Connecting…" : folder ? "Refresh" : "Connect"}
-                        </Button>
-                      </div>
-                    )}
-                  </Field>
+                  <FolderLinkField
+                    autoFocus
+                    value={values.drive_folder_link}
+                    onChange={(link) => {
+                      form.set("drive_folder_link", link);
+                      setFolder(null);
+                    }}
+                    onConnect={connectFolder}
+                    connecting={connecting}
+                    connected={!!folder}
+                    error={form.error("drive_folder_link")}
+                  />
                 </div>
 
                 {connecting ? (
-                  <div className="mt-6">
-                    <Skeleton className="h-5 w-48" />
-                    <div className="mt-4 grid grid-cols-3 gap-2 sm:grid-cols-6">
-                      {Array.from({ length: 6 }, (_, index) => (
-                        <Skeleton key={index} className="aspect-square w-full" />
-                      ))}
-                    </div>
-                  </div>
+                  <FolderSkeleton />
+                ) : folder ? (
+                  <FolderResult folder={folder} />
                 ) : (
-                  folder && <FolderResult folder={folder} />
+                  <div className="mt-6 flex flex-wrap items-center justify-between gap-3 rounded-control border border-dashed border-control px-4 py-3.5">
+                    <p className="flex min-w-0 flex-1 items-start gap-2.5 text-sm text-muted">
+                      <CalendarCheck className="mt-0.5 size-4 shrink-0 text-faint" aria-hidden="true" />
+                      <span>
+                        <span className="font-medium text-ink">No photos yet?</span> Book the shoot now; it goes on your schedule and the Drive folder can be connected
+                        any time.
+                      </span>
+                    </p>
+                    <Button onClick={book} loading={busy === "book"} disabled={busy === "next"}>
+                      Skip — just book
+                    </Button>
+                  </div>
                 )}
-              </StepIntro>
+              </Deck>
             )}
 
             {step === 3 && (
-              <StepIntro
+              <Deck
                 title="Project timeline"
+                aside={<span className="font-mono text-xs text-faint tabular">{count(totalDays, "day")}</span>}
                 text="How many days does each stage get? The next stage starts as soon as one is done, so finishing early moves every later date forward."
               >
-                <ol className="divide-y divide-rule rounded-card border border-line">
+                <ol className="divide-y divide-rule overflow-hidden rounded-[12px] border border-rule bg-ground/40">
                   {preview.map((entry) => (
                     <li key={entry.value} className="p-4">
                       <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
@@ -273,14 +351,15 @@ function Wizard({ options }: { options: Options }) {
                 {last && (
                   <p className="mt-4 rounded-control bg-raised px-4 py-3 text-sm text-muted">
                     If every stage takes its full time, the client will have finished downloading by{" "}
-                    <span className="font-semibold text-ink">{longDate(last.dueAt)}</span> ({count(daysBetween(new Date(), last.dueAt), "day")} from today).
+                    <span className="font-semibold text-ink">{longDate(last.dueAt)}</span> ({count(daysBetween(new Date(), last.dueAt), "day")} from today{timelineStart > new Date() ? `, counting from the shoot on ${longDate(timelineStart)}` : ""}).
                   </p>
                 )}
-              </StepIntro>
+              </Deck>
             )}
 
             {step === 4 && (
-              <StepIntro title="Sharing settings" text="Control how your client accesses and uses the gallery.">
+              <>
+              <Deck title="Access" text="Protect the gallery and decide how long the link stays open.">
                 <div className="grid gap-5 sm:grid-cols-2">
                   <Field label="Gallery password / PIN" error={form.error("share_password")}>
                     {(id) => (
@@ -322,106 +401,91 @@ function Wizard({ options }: { options: Options }) {
                     )}
                   </Field>
                 </div>
+              </Deck>
 
-                <div className="mt-4 divide-y divide-rule border-t border-rule">
+              <Deck title="What the client can do" text="Permissions inside the gallery.">
+                <div className="-my-4 divide-y divide-rule">
                   <SwitchRow label="Allow comments" description="Clients can leave notes on individual photos." checked={values.allow_comments} onChange={(v) => form.set("allow_comments", v)} />
                   <SwitchRow label="Allow downloads" description="Clients can download photos from the final delivery gallery." checked={values.allow_download} onChange={(v) => form.set("allow_download", v)} />
-                  <SwitchRow label="Require payment before download" description="Downloads stay locked until you confirm payment." checked={values.requires_payment} onChange={(v) => form.set("requires_payment", v)} />
                 </div>
+              </Deck>
 
-                <dl className="mt-2 grid gap-4 rounded-control bg-raised p-4 text-sm sm:grid-cols-4">
+              <Deck title="Payment" text="Already paid, or a down payment (DP)? Set how much came in. You can update it any time from the project page.">
+                <PaymentSlider value={values.paid_percent} onChange={(percent) => form.set("paid_percent", percent)} />
+              </Deck>
+
+              <Deck title="Summary">
+                <dl className="grid grid-cols-2 gap-px overflow-hidden rounded-[12px] border border-rule bg-rule text-sm sm:grid-cols-5">
                   {[
                     ["Project", values.title],
-                    ["Client", values.client_name],
-                    ["Photos", number(folder?.photo_count ?? 0)],
+                    ["Client", clientName],
+                    ["Photos", folder ? number(folder.photo_count) : "Later"],
                     ["Timeline", count(totalDays, "day")],
+                    ["Payment", paymentLabel(values.paid_percent)],
                   ].map(([term, value]) => (
-                    <div key={term} className="min-w-0">
-                      <dt className="text-muted">{term}</dt>
-                      <dd className="truncate font-semibold text-ink tabular">{value || "—"}</dd>
+                    <div key={term} className="min-w-0 bg-surface px-4 py-3">
+                      <dt className="text-xs text-muted">{term}</dt>
+                      <dd className="mt-0.5 truncate font-mono text-[13px] font-medium text-ink tabular">{value || "—"}</dd>
                     </div>
                   ))}
                 </dl>
-              </StepIntro>
+              </Deck>
+              </>
             )}
-          </div>
 
-          <PanelFooter className="justify-between">
-            <div>{step > 1 && <Button onClick={() => setStep(step - 1)}>Back</Button>}</div>
-            <Button type="submit" variant="primary" loading={busy}>
-              {step === steps.length ? "Create project" : "Continue"}
+        {/* Actions bar, styled like PanelFooter. */}
+        <div className="flex items-center justify-between gap-3 rounded-card border border-line bg-surface px-5 py-3">
+          <div>{step > 1 && <Button onClick={() => setStep(step - 1)}>Back</Button>}</div>
+          <div className="flex items-center gap-3">
+            <span className="hidden font-mono text-xs text-faint tabular sm:inline">
+              Step {step} of {steps.length}
+            </span>
+            <Button type="submit" variant="primary" loading={busy === "next"} disabled={busy === "book"}>
+              {step === steps.length ? (folder ? "Create project" : "Book project") : "Continue"}
             </Button>
-          </PanelFooter>
-        </Panel>
+          </div>
+        </div>
       </form>
     </div>
   );
 }
 
-function StepIntro({ title, text, children }: { title: string; text: string; children: ReactNode }) {
+/** A form section as an Overview deck: deck-title header over a rule, then the fields. */
+function Deck({ title, text, aside, children }: { title: string; text?: string; aside?: ReactNode; children: ReactNode }) {
   return (
-    <>
-      <h2 className="text-section font-semibold text-ink">{title}</h2>
-      <p className="mt-1 text-sm text-muted">{text}</p>
-      <div className="mt-6">{children}</div>
-    </>
-  );
-}
-
-function FolderResult({ folder }: { folder: FolderPreview }) {
-  return (
-    <div className="mt-6">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <p className="flex items-center gap-2 text-sm font-semibold text-ink">
-          <FolderCheck className="size-4 text-positive" aria-hidden="true" />
-          {folder.name}
-        </p>
-        <Pill tone="accent">{count(folder.photo_count, "photo found", "photos found")}</Pill>
-      </div>
-
-      {folder.photo_count === 0 ? (
-        <Notice tone="warning" className="mt-4">
-          This folder has no photos yet. You can still create the project; photos will appear once they&rsquo;re uploaded and the folder is re-synced.
-        </Notice>
-      ) : (
-        <>
-          <div className="mt-4 grid grid-cols-3 gap-2 sm:grid-cols-6">
-            {folder.preview.map((photo) => (
-              <figure key={photo.drive_file_id} className="min-w-0">
-                <img src={photo.url} alt={photo.filename} loading="lazy" className="aspect-square w-full bg-raised object-cover" />
-                <figcaption className="mt-1 truncate text-xs text-muted" title={photo.filename}>
-                  {photo.filename}
-                </figcaption>
-              </figure>
-            ))}
-          </div>
-          {folder.photo_count > folder.preview.length && (
-            <p className="mt-3 text-sm text-muted">+ {number(folder.photo_count - folder.preview.length)} more will be imported.</p>
-          )}
-        </>
-      )}
-    </div>
+    <section className="rounded-card border border-line bg-surface">
+      <header className="flex items-start justify-between gap-4 border-b border-rule px-5 py-4">
+        <div className="min-w-0">
+          <h2 className="deck-title">{title}</h2>
+          {text && <p className="mt-1.5 text-[13px] text-muted">{text}</p>}
+        </div>
+        {aside && <div className="shrink-0 pt-px">{aside}</div>}
+      </header>
+      <div className="p-5 sm:p-6">{children}</div>
+    </section>
   );
 }
 
 function StepSummary({
   step,
   done,
-  values,
+  title,
+  client,
   folder,
   totalDays,
 }: {
   step: number;
   done: boolean;
-  values: { title: string; client_name: string; share_password: string };
+  title: string;
+  client: string;
   folder: FolderPreview | null;
   totalDays: number;
 }) {
   if (!done) return null;
   const text =
-    step === 1 ? [values.title, values.client_name].filter(Boolean).join(" · ")
-    : step === 2 ? (folder ? `${folder.name} · ${count(folder.photo_count, "photo")}` : "")
+    step === 1 ? [title, client].filter(Boolean).join(" · ")
+    : step === PHOTOS_STEP ? (folder ? `${folder.name} · ${count(folder.photo_count, "photo")}` : "Booking only — connect later")
     : step === 3 ? count(totalDays, "day")
     : "";
-  return text ? <span className="mt-0.5 hidden truncate text-xs text-muted lg:block">{text}</span> : null;
+  return text ? <span className="mt-0.5 hidden truncate text-xs normal-case tracking-normal text-muted lg:block">{text}</span> : null;
 }

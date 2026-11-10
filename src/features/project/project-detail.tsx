@@ -1,44 +1,50 @@
 "use client";
 
 import Link from "next/link";
-import { useState, type ReactNode } from "react";
-import { ArrowRight, Check, ExternalLink, FolderOpen, Mail, Pencil, Phone } from "lucide-react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useQueryClient } from "@tanstack/react-query";
+import { Banknote, Check, ExternalLink, FolderOpen, Pencil } from "lucide-react";
 import { BackLink, PageBody } from "@/components/app-shell";
 import { Button } from "@/components/ui/button";
 import { CopyButton } from "@/components/ui/copy-button";
 import { Dialog } from "@/components/ui/dialog";
+import { PaymentBar, paymentLabel, PaymentSlider, paymentState } from "@/components/ui/payment";
 import { EmptyState, LoadError } from "@/components/ui/notice";
 import { StatusBadge } from "@/components/ui/pill";
 import { Skeleton } from "@/components/ui/spinner";
 import { useToast } from "@/components/ui/feedback";
 import { api, ApiError } from "@/lib/api";
 import { cn } from "@/lib/cn";
-import { count, dateTime, longDate, number, relative, shortDate } from "@/lib/format";
+import { longDate, number, shortDate } from "@/lib/format";
 import type { ProjectDetail } from "@/lib/types";
 import { useForm } from "@/lib/use-form";
 import { useQueryState } from "@/lib/use-query-state";
 import { useTitle } from "@/lib/use-title";
-import { DetailsFields } from "@/features/projects/details-fields";
+import { STUDIO_COLORS } from "@/features/overview/studio-scene";
+import { detailPayload, detailValues, DetailsFields } from "@/features/projects/details-fields";
 import { useOptions } from "@/features/projects/use-options";
 import { DeliveryTab } from "./tab-delivery";
 import { PhotosTab } from "./tab-photos";
 import { SelectionsTab } from "./tab-selections";
 import { SettingsTab } from "./tab-settings";
 import { TimelineTab } from "./tab-timeline";
-import { useProject, useSetProject } from "./use-project";
+import { ToolbarSlot } from "./toolbar-slot";
+import { projectKey, useProject, useSetProject } from "./use-project";
 
 const TABS = [
   { key: "photos", label: "Photos" },
   { key: "selections", label: "Client picks" },
   { key: "delivery", label: "Delivery" },
   { key: "timeline", label: "Timeline" },
-  { key: "settings", label: "Sharing" },
+  { key: "settings", label: "Settings" },
 ] as const;
 
 type TabKey = (typeof TABS)[number]["key"];
 
 export function ProjectDetailScreen({ id }: { id: string }) {
   const project = useProject(id);
+  const [editing, setEditing] = useState(false);
+  const [toolbar, setToolbar] = useState<HTMLDivElement | null>(null);
   const url = useQueryState();
   const requested = url.get("tab", "photos");
   const tab: TabKey = TABS.some((item) => item.key === requested) ? (requested as TabKey) : "photos";
@@ -48,12 +54,11 @@ export function ProjectDetailScreen({ id }: { id: string }) {
 
   if (project.isPending) {
     return (
-      <PageBody>
-        <Skeleton className="h-4 w-20" />
-        <Skeleton className="mt-3 h-9 w-80" />
-        <Skeleton className="mt-6 h-28 w-full rounded-card" />
-        <Skeleton className="mt-6 h-96 w-full rounded-card" />
-      </PageBody>
+      <div className="px-4 pb-10 pt-5 sm:px-6 lg:px-10">
+        <Skeleton className="h-[188px] w-full rounded-board" />
+        <Skeleton className="mt-4 h-[42px] w-[520px] max-w-full rounded-[12px]" />
+        <Skeleton className="mt-4 h-96 w-full rounded-card" />
+      </div>
     );
   }
 
@@ -76,265 +81,290 @@ export function ProjectDetailScreen({ id }: { id: string }) {
   }
 
   const data = project.data;
+  const station = stationOf(data);
+  const stage = data.current_stage;
 
   return (
-    <>
-      <div className="border-b border-line bg-surface">
-        <div className="px-4 pt-6 sm:px-6 sm:pt-8 lg:px-10">
-          <nav aria-label="Breadcrumb" className="flex items-center gap-1.5 text-[13px] text-muted">
-            <Link href="/projects" className="hover:text-ink">
-              Projects
-            </Link>
-            <span aria-hidden="true">/</span>
-            <span className="truncate text-ink">{data.title}</span>
-          </nav>
+    <div className="px-4 pb-20 pt-5 sm:px-6 lg:px-10">
+      {/* The board: who and what on the left, actions on the right, the five Overview stations along the bottom. */}
+      <section className="relative overflow-hidden rounded-board border border-line bg-surface">
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-0 opacity-60 [background-image:linear-gradient(var(--rule)_1px,transparent_1px),linear-gradient(90deg,var(--rule)_1px,transparent_1px)] [background-size:44px_44px]"
+        />
 
-          <div className="mt-3 flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
-            <div className="min-w-0">
-              <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-                <h1 className="min-w-0 truncate text-[1.625rem] font-semibold leading-9 tracking-[-0.025em] sm:text-[2rem] sm:leading-10">{data.title}</h1>
-                <StatusBadge status={data.status} />
-              </div>
-              <p className="mt-1 text-sm text-muted">
-                {[data.client_name ?? "No client", data.category, data.shoot_date && `shot ${longDate(data.shoot_date)}`].filter(Boolean).join(" · ")}
-              </p>
+        <div className="relative flex flex-col gap-4 p-5 lg:flex-row lg:items-start lg:justify-between">
+          <div className="min-w-0">
+            <nav aria-label="Breadcrumb" className="eyebrow flex items-center gap-1.5">
+              <Link href="/projects" className="hover:text-ink">
+                Projects
+              </Link>
+              <span aria-hidden="true">/</span>
+              <span>{data.category ?? "Project"}</span>
+            </nav>
+            <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1.5">
+              <h1 className="min-w-0 truncate text-xl font-semibold tracking-[-0.02em] text-ink sm:text-2xl">{data.title}</h1>
+              {/* A draft without a Drive folder is a booking. */}
+              <StatusBadge status={data.status.value === "draft" && !data.has_photos_folder ? { ...data.status, label: "Booked" } : data.status} />
+              <PaidTag project={data} />
             </div>
-
-            <div className="flex flex-wrap items-center gap-2">
-              <EditDetailsButton project={data} />
-              {data.drive_folder_link && (
-                <a
-                  href={data.drive_folder_link}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex h-9 items-center gap-2 rounded-control border border-control bg-surface px-3.5 text-sm font-medium text-ink transition-colors hover:bg-raised"
-                >
-                  <FolderOpen className="size-4" />
-                  Drive
-                </a>
+            <p className="mt-0.5 text-[13px] text-muted">
+              {data.client ? (
+                <Link href={`/clients/${data.client.id}`} className="font-medium text-ink underline-offset-4 hover:underline">
+                  {data.client.name}
+                </Link>
+              ) : (
+                (data.client_name ?? "No client")
               )}
-              <a
-                href={data.share_url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex h-9 items-center gap-2 rounded-control border border-control bg-surface px-3.5 text-sm font-medium text-ink transition-colors hover:bg-raised"
-              >
-                <ExternalLink className="size-4" />
-                Preview gallery
-              </a>
-              <CopyButton text={data.share_url} variant="primary" copiedLabel="Link copied">
-                Copy client link
-              </CopyButton>
+              {data.shoot_date && ` · shoot ${longDate(data.shoot_date)}${data.shoot_time ? `, ${data.shoot_time.slice(0, 5)}` : ""}`}
+              {data.location && ` · ${data.location}`}
+              {stage && (
+                <span className={cn(stage.is_overdue && "text-negative")}>
+                  {" · "}
+                  {stage.label} {stage.is_overdue ? "overdue since" : "due"} {shortDate(stage.due_at)}
+                </span>
+              )}
+              {data.booking_request && (
+                <>
+                  {" · "}
+                  <Link href={`/bookings/${data.booking_request.id}`} className="font-medium text-ink underline-offset-4 hover:underline">
+                    From booking request
+                  </Link>
+                </>
+              )}
+            </p>
+            <div className="mt-3 max-w-md">
+              <StationTrack station={station} />
             </div>
           </div>
 
-          <Workflow project={data} onTab={setTab} />
-
-          <nav className="no-scrollbar -mb-px mt-6 flex gap-1 overflow-x-auto" aria-label="Project sections">
-            {TABS.map((item) => {
-              const active = item.key === tab;
-              const badge =
-                item.key === "photos" ? data.counts.photos
-                : item.key === "selections" ? data.counts.selections
-                : item.key === "delivery" ? data.counts.finals
-                : null;
-              return (
-                <button
-                  key={item.key}
-                  type="button"
-                  onClick={() => setTab(item.key)}
-                  aria-current={active ? "page" : undefined}
-                  className={cn(
-                    "relative inline-flex h-11 items-center gap-2 whitespace-nowrap px-3 text-sm transition-colors",
-                    active ? "font-medium text-ink" : "text-muted hover:text-ink",
-                  )}
-                >
-                  {item.label}
-                  {badge !== null && (
-                    <span className={cn("rounded-chip px-1.5 font-mono text-[11px] tabular", active ? "bg-accent-soft text-accent-ink" : "bg-raised text-faint")}>
-                      {number(badge)}
-                    </span>
-                  )}
-                  {active && <span aria-hidden="true" className="absolute inset-x-3 bottom-0 h-0.5 rounded-full bg-accent" />}
-                </button>
-              );
-            })}
-          </nav>
+          <div className="flex shrink-0 items-center gap-1.5">
+            <IconAction label="Edit details" onClick={() => setEditing(true)}>
+              <Pencil className="size-4" />
+            </IconAction>
+            {data.drive_folder_link && (
+              <IconAction label="Open Drive folder" href={data.drive_folder_link}>
+                <FolderOpen className="size-4" />
+              </IconAction>
+            )}
+            <IconAction label="Preview gallery" href={data.share_url}>
+              <ExternalLink className="size-4" />
+            </IconAction>
+            <CopyButton text={data.share_url} variant="primary" copiedLabel="Link copied">
+              Copy client link
+            </CopyButton>
+          </div>
         </div>
+
+        {/* One toolbar row: the section chips, then whatever the open tab needs (filters, view, sync). */}
+        <div className="relative flex flex-wrap items-center gap-2 border-t border-rule bg-surface/80 px-5 py-3">
+          <div className="no-scrollbar max-w-full overflow-x-auto">
+            <nav aria-label="Project sections" className="inline-flex items-center gap-1 rounded-[12px] border border-line bg-surface p-1">
+          {TABS.map((item) => {
+            const active = item.key === tab;
+            const badge =
+              item.key === "photos" ? data.counts.photos
+              : item.key === "selections" ? data.counts.selections
+              : item.key === "delivery" ? data.counts.finals
+              : null;
+            return (
+              <button
+                key={item.key}
+                type="button"
+                onClick={() => setTab(item.key)}
+                aria-current={active ? "page" : undefined}
+                className={cn(
+                  "flex h-8 shrink-0 items-center gap-2 whitespace-nowrap rounded-[10px] px-3.5 text-[13px] font-semibold transition-colors",
+                  active ? "bg-ink text-ground" : "text-muted hover:bg-raised hover:text-ink",
+                )}
+              >
+                {item.label}
+                {badge !== null && (
+                  <span className={cn("font-mono text-[11px] font-normal tracking-normal tabular", active ? "opacity-70" : "text-faint")}>{number(badge)}</span>
+                )}
+              </button>
+            );
+          })}
+            </nav>
+          </div>
+          <div ref={setToolbar} className="flex min-w-0 flex-1 flex-wrap items-center gap-2 empty:hidden" />
+        </div>
+      </section>
+
+      <div className="mt-4">
+        <ToolbarSlot.Provider value={toolbar}>
+          {tab === "photos" && <PhotosTab project={data} />}
+          {tab === "selections" && <SelectionsTab project={data} />}
+          {tab === "delivery" && <DeliveryTab project={data} onOpenSettings={() => setTab("settings")} />}
+          {tab === "timeline" && <TimelineTab project={data} />}
+          {tab === "settings" && <SettingsTab project={data} onEditClient={() => setEditing(true)} />}
+        </ToolbarSlot.Provider>
       </div>
 
-      <div className="px-4 pb-20 pt-7 sm:px-6 lg:px-10">
-        {tab === "photos" && <PhotosTab project={data} />}
-        {tab === "selections" && <SelectionsTab project={data} />}
-        {tab === "delivery" && <DeliveryTab project={data} onOpenSettings={() => setTab("settings")} />}
-        {tab === "timeline" && <TimelineTab project={data} />}
-        {tab === "settings" && <SettingsTab project={data} />}
-      </div>
-    </>
+      {editing && <EditDetailsDialog project={data} onClose={() => setEditing(false)} />}
+    </div>
   );
 }
 
 // --- Workflow -------------------------------------------------------------
 
-const STEPS = ["Set up", "Client picking", "Editing", "Delivered"] as const;
+/** The Overview's five stations, in the same colours. Payment is a flag (the tag by the status), not a station. */
+const STATIONS = [
+  { label: "Set up", color: STUDIO_COLORS.purple },
+  { label: "Picking", color: STUDIO_COLORS.blue },
+  { label: "Review", color: STUDIO_COLORS.teal },
+  { label: "Editing", color: STUDIO_COLORS.coral },
+  { label: "Done", color: STUDIO_COLORS.green },
+] as const;
 
-function stepOf(project: ProjectDetail): number {
-  switch (project.status.value) {
-    case "draft":
-      return 0;
-    case "selection":
-      return project.selection_submitted_at ? 2 : 1;
-    case "editing":
-      return 2;
+/** Same placement as the Overview's stationOf, so a project sits at the same station on both screens. */
+function stationOf(p: ProjectDetail): number {
+  switch (p.status.value) {
     case "completed":
       return 4;
+    case "editing":
+      return 3;
+    case "draft":
+      return p.selection_submitted_at ? 2 : 0;
     default:
-      return 1;
+      return p.selection_submitted_at ? 2 : 1;
   }
 }
 
-/** What the photographer should do next, and the tab where it happens. */
-function nextStep(project: ProjectDetail): { title: string; detail: string; tab?: TabKey; action?: string } {
-  const client = project.client_name ?? "The client";
-  const stage = project.current_stage;
-  const due = stage ? ` · ${stage.label} ${stage.is_overdue ? "overdue since" : "due"} ${shortDate(stage.due_at)}` : "";
-
-  if (project.status.value === "expired" || project.share_expired) {
-    return { title: "The gallery link has expired", detail: "Extend the expiry date so the client can open it again.", tab: "settings", action: "Fix sharing" };
-  }
-  if (project.counts.photos === 0) {
-    return { title: "Waiting for photos from Drive", detail: "Add photos to the Drive folder, then sync.", tab: "photos", action: "Open photos" };
-  }
-  if (project.can_move_to_editing && project.selection_submitted_at) {
-    return {
-      title: `${client} sent ${count(project.counts.selections, "pick")}`,
-      detail: `Submitted ${relative(project.selection_submitted_at)}. Review them and move the project to editing.${due}`,
-      tab: "selections",
-      action: "Review picks",
-    };
-  }
-  if (project.can_move_to_editing) {
-    return {
-      title: `Waiting for ${client} to pick`,
-      detail: `${project.last_viewed_at ? `Gallery opened ${relative(project.last_viewed_at)}` : "Gallery not opened yet"} · ${count(project.counts.selections, "photo")} picked so far${due}`,
-    };
-  }
-  if (project.status.value === "editing") {
-    return project.delivery_folder_id
-      ? { title: "Deliver the finals", detail: `${count(project.counts.finals, "final")} synced. Mark completed to switch the client to the delivery gallery.${due}`, tab: "delivery", action: "Go to delivery" }
-      : { title: "Edit, then connect the finals folder", detail: `Put the edited photos in a separate Drive folder and connect it.${due}`, tab: "delivery", action: "Connect folder" };
-  }
-  if (project.requires_payment && !project.paid_at) {
-    return { title: "Payment not confirmed", detail: "Downloads stay locked and previews watermarked until you confirm payment.", tab: "delivery", action: "Confirm payment" };
-  }
-  return { title: "Delivered", detail: `${count(project.counts.finals, "final photo")} in ${client}'s delivery gallery.` };
+function StationTrack({ station }: { station: number }) {
+  return (
+    <ol className="grid grid-cols-5 gap-1.5" aria-label={`Stage ${station + 1} of ${STATIONS.length}: ${STATIONS[station].label}`}>
+      {STATIONS.map(({ label, color }, index) => {
+        const current = index === station;
+        return (
+          <li key={label} className="min-w-0" aria-current={current ? "step" : undefined}>
+            <span className="block h-1.5 rounded-full" style={{ background: index <= station ? color.r : "var(--active)" }} />
+            <span
+              className={cn(
+                "mt-1.5 block truncate text-[11px]",
+                current ? "font-semibold text-ink" : index < station ? "text-muted" : "text-faint",
+                !current && "max-sm:invisible",
+              )}
+            >
+              {label}
+            </span>
+          </li>
+        );
+      })}
+    </ol>
+  );
 }
 
-function Workflow({ project, onTab }: { project: ProjectDetail; onTab: (tab: TabKey) => void }) {
-  const step = stepOf(project);
-  const next = nextStep(project);
+/**
+ * How much is paid, next to the status badge. Click it for a 0–100% slider
+ * (`PUT /projects/{id}/payment {percent}`); anything in between is a down payment.
+ */
+function PaidTag({ project }: { project: ProjectDetail }) {
+  const client = useQueryClient();
+  const setProject = useSetProject(project.id);
+  const toast = useToast();
+  // Fixed to the viewport: the board around the header clips anything that overflows it.
+  const [open, setOpen] = useState<{ top: number; left: number } | null>(null);
+  const [draft, setDraft] = useState(project.paid_percent);
+  const [busy, setBusy] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  const percent = project.paid_percent;
+  const state = paymentState(percent);
+
+  useEffect(() => {
+    if (!open) return;
+    const close = (event: MouseEvent | KeyboardEvent) => {
+      if (event instanceof KeyboardEvent ? event.key === "Escape" : !ref.current?.contains(event.target as Node)) setOpen(null);
+    };
+    // A fixed popover would float away from its tag on scroll, so it closes instead.
+    const dismiss = () => setOpen(null);
+    document.addEventListener("mousedown", close);
+    document.addEventListener("keydown", close);
+    window.addEventListener("scroll", dismiss);
+    window.addEventListener("resize", dismiss);
+    return () => {
+      document.removeEventListener("mousedown", close);
+      document.removeEventListener("keydown", close);
+      window.removeEventListener("scroll", dismiss);
+      window.removeEventListener("resize", dismiss);
+    };
+  }, [!!open]);
+
+  async function save() {
+    setBusy(true);
+    try {
+      const result = await api.put<{ paid: boolean; percent: number; paid_at: string | null }>(`/projects/${project.id}/payment`, { percent: draft });
+      setProject({ ...project, is_paid: result.paid, paid_percent: result.percent, paid_at: result.paid_at });
+      client.invalidateQueries({ queryKey: projectKey(project.id) });
+      client.invalidateQueries({ queryKey: ["overview"] });
+      client.invalidateQueries({ queryKey: ["projects"] });
+      client.invalidateQueries({ queryKey: ["schedule"] });
+      toast(result.percent >= 100 ? "Marked as paid in full." : result.percent > 0 ? `Down payment set to ${result.percent}%.` : "Marked as unpaid.");
+      setOpen(null);
+    } catch (error) {
+      toast(error instanceof ApiError ? error.message : "Couldn't update the payment.", "error");
+    } finally {
+      setBusy(false);
+    }
+  }
 
   return (
-    <section aria-label="Workflow" className="mt-6 grid gap-4 rounded-card border border-line bg-ground p-4 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)] lg:items-center lg:gap-8 lg:p-5">
-      <ol className="grid grid-cols-4 gap-2">
-        {STEPS.map((label, index) => {
-          const done = index < step;
-          const current = index === step;
-          return (
-            <li key={label} aria-current={current ? "step" : undefined}>
-              <span className={cn("block h-1 rounded-full", done ? "bg-ink" : current ? "bg-accent" : "bg-line")} />
-              <span className={cn("mt-2 flex items-center gap-1 text-xs", done || current ? "font-medium text-ink" : "text-faint")}>
-                {done && <Check className="size-3 shrink-0" strokeWidth={3} />}
-                <span className="truncate">{label}</span>
-              </span>
-            </li>
-          );
-        })}
-      </ol>
+    <div ref={ref} className="relative">
+      <button
+        type="button"
+        onClick={() => {
+          setDraft(percent);
+          const rect = ref.current?.getBoundingClientRect();
+          setOpen((value) => (value || !rect ? null : { top: rect.bottom + 6, left: Math.min(rect.left, window.innerWidth - 316) }));
+        }}
+        aria-expanded={!!open}
+        aria-haspopup="dialog"
+        title={state === "paid" && project.paid_at ? `Paid in full ${longDate(project.paid_at)}` : `${percent}% paid · click to change`}
+        className={cn(
+          "inline-flex h-6 flex-none items-center gap-1.5 whitespace-nowrap rounded-chip px-2 text-[11px] font-medium transition-colors",
+          state === "paid"
+            ? "bg-status-completed-soft text-status-completed hover:ring-1 hover:ring-status-completed"
+            : state === "partial"
+              ? "bg-status-selection-soft text-status-selection hover:ring-1 hover:ring-status-selection"
+              : "border border-dashed border-control text-muted hover:border-faint hover:text-ink",
+        )}
+      >
+        {state === "paid" ? <Check className="size-3" strokeWidth={3} aria-hidden="true" /> : <Banknote className="size-3" aria-hidden="true" />}
+        {paymentLabel(percent)}
+        {state === "partial" && <PaymentBar percent={percent} className="w-8" />}
+      </button>
 
-      <div className="flex flex-col gap-3 border-line sm:flex-row sm:items-center sm:justify-between lg:border-s lg:ps-8">
-        <div className="min-w-0">
-          <p className="font-mono text-[11px] uppercase tracking-[0.08em] text-faint">Next step</p>
-          <p className="mt-0.5 text-sm font-semibold text-ink">{next.title}</p>
-          <p className="mt-0.5 text-[13px] text-muted">{next.detail}</p>
+      {open && (
+        <div role="dialog" aria-label="Payment" className="fixed z-50 w-[300px] rounded-card border border-line bg-surface p-4 shadow-float" style={{ top: open.top, left: Math.max(8, open.left) }}>
+          <PaymentSlider value={draft} onChange={setDraft} disabled={busy} />
+          <div className="mt-4 flex items-center justify-end gap-2 border-t border-rule pt-3">
+            <Button size="sm" onClick={() => setOpen(null)} disabled={busy}>
+              Cancel
+            </Button>
+            <Button size="sm" variant="primary" onClick={save} loading={busy} disabled={draft === percent}>
+              Save
+            </Button>
+          </div>
         </div>
-        {next.tab && next.action && (
-          <Button variant="accent" size="sm" onClick={() => onTab(next.tab!)} className="self-start sm:self-center">
-            {next.action}
-            <ArrowRight className="size-3.5" />
-          </Button>
-        )}
-      </div>
-
-      <ClientStrip project={project} />
-    </section>
-  );
-}
-
-function ClientStrip({ project }: { project: ProjectDetail }) {
-  return (
-    <dl className="grid grid-cols-2 gap-x-6 gap-y-3 border-t border-line pt-4 text-[13px] sm:grid-cols-4 lg:col-span-2">
-      <Fact label="Client">{project.client_name || <span className="text-faint">—</span>}</Fact>
-      <Fact label="Email">
-        {project.client_email ? (
-          <a href={`mailto:${project.client_email}`} className="inline-flex min-w-0 items-center gap-1.5 hover:underline">
-            <Mail className="size-3.5 shrink-0 text-faint" />
-            <span className="truncate">{project.client_email}</span>
-          </a>
-        ) : (
-          <span className="text-faint">Not added</span>
-        )}
-      </Fact>
-      <Fact label="Phone">
-        {project.client_phone ? (
-          <span className="flex min-w-0 items-center gap-2">
-            <a href={`tel:${project.client_phone}`} className="inline-flex min-w-0 items-center gap-1.5 hover:underline">
-              <Phone className="size-3.5 shrink-0 text-faint" />
-              <span className="truncate">{project.client_phone}</span>
-            </a>
-            {project.whatsapp_url && (
-              <a href={project.whatsapp_url} target="_blank" rel="noopener noreferrer" className="shrink-0 font-medium text-positive hover:underline">
-                WhatsApp
-              </a>
-            )}
-          </span>
-        ) : (
-          <span className="text-faint">Not added</span>
-        )}
-      </Fact>
-      <Fact label="Last seen">
-        {project.last_viewed_at ? (
-          <span title={dateTime(project.last_viewed_at)}>Opened {relative(project.last_viewed_at)}</span>
-        ) : (
-          <span className="text-faint">Not opened yet</span>
-        )}
-      </Fact>
-    </dl>
-  );
-}
-
-function Fact({ label, children }: { label: string; children: ReactNode }) {
-  return (
-    <div className="min-w-0">
-      <dt className="text-xs text-muted">{label}</dt>
-      <dd className="mt-0.5 truncate font-medium text-ink">{children}</dd>
+      )}
     </div>
   );
 }
 
-// --- Edit details -----------------------------------------------------------
-
-function EditDetailsButton({ project }: { project: ProjectDetail }) {
-  const [editing, setEditing] = useState(false);
-  return (
-    <>
-      <Button icon={<Pencil className="size-3.5" />} onClick={() => setEditing(true)}>
-        Edit
-      </Button>
-      {editing && <EditDetailsDialog project={project} onClose={() => setEditing(false)} />}
-    </>
+function IconAction({ label, onClick, href, children }: { label: string; onClick?: () => void; href?: string; children: ReactNode }) {
+  const className = "flex size-9 items-center justify-center rounded-control border border-line bg-surface text-muted transition-colors hover:bg-raised hover:text-ink";
+  return href ? (
+    <a href={href} target="_blank" rel="noopener noreferrer" aria-label={label} title={label} className={className}>
+      {children}
+    </a>
+  ) : (
+    <button type="button" onClick={onClick} aria-label={label} title={label} className={className}>
+      {children}
+    </button>
   );
 }
+
+// --- Edit details -----------------------------------------------------------
 
 function EditDetailsDialog({ project, onClose }: { project: ProjectDetail; onClose: () => void }) {
   const options = useOptions();
@@ -342,20 +372,13 @@ function EditDetailsDialog({ project, onClose }: { project: ProjectDetail; onClo
   const toast = useToast();
   const [busy, setBusy] = useState(false);
   // Opening the dialog always starts from the saved values.
-  const form = useForm({
-    title: project.title,
-    client_name: project.client_name ?? "",
-    client_email: project.client_email ?? "",
-    client_phone: project.client_phone ?? "",
-    shoot_date: project.shoot_date ?? "",
-    category: project.category ?? "",
-  });
+  const form = useForm(detailValues(project));
 
   async function save(event: React.FormEvent) {
     event.preventDefault();
     setBusy(true);
     try {
-      const result = await api.patch<{ project: ProjectDetail }>(`/projects/${project.id}/details`, form.values);
+      const result = await api.patch<{ project: ProjectDetail }>(`/projects/${project.id}/details`, detailPayload(form.values));
       setProject(result.project);
       toast("Details saved.");
       onClose();
@@ -370,8 +393,8 @@ function EditDetailsDialog({ project, onClose }: { project: ProjectDetail; onClo
       open
       onClose={onClose}
       size="lg"
-      title="Project & client details"
-      description="Changes show up in your project list and on the client's gallery straight away."
+      title="Project details"
+      description="Changes show up in your project list, schedule and the client's gallery straight away."
       footer={
         <>
           <Button onClick={onClose}>Cancel</Button>
@@ -382,7 +405,14 @@ function EditDetailsDialog({ project, onClose }: { project: ProjectDetail; onClo
       }
     >
       <form id="edit-details" onSubmit={save} noValidate>
-        <DetailsFields values={form.values} set={form.set} error={form.error} categories={options.data?.categories ?? []} autoFocus />
+        <DetailsFields
+          values={form.values}
+          set={form.set}
+          error={form.error}
+          categories={options.data?.categories ?? []}
+          client={project.client}
+          autoFocus
+        />
       </form>
     </Dialog>
   );

@@ -12,7 +12,7 @@ import { Pill } from "@/components/ui/pill";
 import { Skeleton } from "@/components/ui/spinner";
 import { api, ApiError } from "@/lib/api";
 import { cn } from "@/lib/cn";
-import { count, fileSize, longDate, number, plural, relative } from "@/lib/format";
+import { count, fileSize, number, plural, relative } from "@/lib/format";
 import type { DeliveryExport, DeliveryTab as Delivery, ProjectDetail } from "@/lib/types";
 import { projectKey } from "./use-project";
 import { ViewerOverlay } from "./viewer-overlay";
@@ -25,7 +25,7 @@ export function DeliveryTab({ project, onOpenSettings }: { project: ProjectDetai
   const [link, setLink] = useState(project.delivery_folder_link ?? "");
   const [linkError, setLinkError] = useState<string>();
   const [completeError, setCompleteError] = useState<string>();
-  const [busy, setBusy] = useState<"connect" | "sync" | "complete" | "paid" | null>(null);
+  const [busy, setBusy] = useState<"connect" | "sync" | "complete" | null>(null);
   const [viewing, setViewing] = useState<number | null>(null);
 
   const delivery = useQuery({
@@ -80,21 +80,6 @@ export function DeliveryTab({ project, onOpenSettings }: { project: ProjectDetai
     }
   }
 
-  async function setPaid(paid: boolean) {
-    if (!paid) {
-      const ok = await confirm({
-        title: "Mark as unpaid?",
-        message: "Downloads will lock and previews will be watermarked again.",
-        confirmLabel: "Mark as unpaid",
-        tone: "danger",
-      });
-      if (!ok) return;
-    }
-    setBusy("paid");
-    await api.put(`/projects/${project.id}/delivery/payment`, { paid }).finally(() => setBusy(null));
-    refresh();
-  }
-
   if (delivery.isPending) return <Skeleton className="h-96 w-full rounded-card" />;
   if (delivery.isError) return <LoadError what="delivery" onRetry={() => delivery.refetch()} />;
 
@@ -103,10 +88,10 @@ export function DeliveryTab({ project, onOpenSettings }: { project: ProjectDetai
   const delivered = project.status.value === "completed";
   const connected = !!project.delivery_folder_id;
 
-  const states: Record<"folder" | "sync" | "payment" | "deliver", StepState> = {
+  // Payment is no longer a delivery step; it is the Paid / Unpaid tag in the project header.
+  const states: Record<"folder" | "sync" | "deliver", StepState> = {
     folder: connected ? "done" : "current",
     sync: !connected ? "upcoming" : data.total > 0 ? "done" : "current",
-    payment: !project.requires_payment ? "skipped" : project.paid_at ? "done" : data.total > 0 ? "current" : "upcoming",
     deliver: delivered ? "done" : data.can_complete ? "current" : "upcoming",
   };
 
@@ -181,39 +166,6 @@ export function DeliveryTab({ project, onOpenSettings }: { project: ProjectDetai
 
         <Step
           n={3}
-          state={states.payment}
-          title="Payment"
-          description={
-            !project.requires_payment ? (
-              <>
-                Not required.{" "}
-                <button type="button" onClick={onOpenSettings} className="font-medium text-ink underline underline-offset-4">
-                  Require payment
-                </button>{" "}
-                to lock downloads until you confirm it.
-              </>
-            ) : project.paid_at ? (
-              `Paid ${longDate(project.paid_at)}. Downloads are unlocked.`
-            ) : (
-              "Downloads are locked and previews watermarked until you confirm payment."
-            )
-          }
-          action={
-            project.requires_payment &&
-            (project.paid_at ? (
-              <Button size="sm" loading={busy === "paid"} onClick={() => setPaid(false)}>
-                Mark as unpaid
-              </Button>
-            ) : (
-              <Button size="sm" variant="primary" loading={busy === "paid"} onClick={() => setPaid(true)}>
-                Confirm payment received
-              </Button>
-            ))
-          }
-        />
-
-        <Step
-          n={4}
           state={states.deliver}
           title={delivered ? "Delivered" : "Deliver to the client"}
           description={
@@ -239,7 +191,7 @@ export function DeliveryTab({ project, onOpenSettings }: { project: ProjectDetai
 
       <aside className="space-y-6">
         <section>
-          <h2 className="mb-2 text-sm font-semibold">Client downloads</h2>
+          <h2 className="deck-title mb-2.5">Client downloads</h2>
           <div className="overflow-hidden rounded-card border border-line bg-surface">
             {data.exports.length === 0 ? (
               <p className="px-4 py-5 text-sm text-muted">No ZIP downloads requested yet.</p>
@@ -265,17 +217,16 @@ export function DeliveryTab({ project, onOpenSettings }: { project: ProjectDetai
         </section>
 
         <section className="rounded-card border border-line bg-surface p-4">
-          <h2 className="text-sm font-semibold">Delivery rules</h2>
+          <h2 className="deck-title">Delivery rules</h2>
           <Facts
             className="mt-3"
             rows={[
               ["Downloads", project.allow_download ? "Allowed" : "Off"],
-              ["Payment", project.requires_payment ? (project.paid_at ? "Confirmed" : "Required") : "Not required"],
               ["Finals", number(data.total)],
             ]}
           />
           <button type="button" onClick={onOpenSettings} className="mt-4 text-[13px] font-medium text-muted underline-offset-4 hover:text-ink hover:underline">
-            Change in Sharing →
+            Change in Settings →
           </button>
         </section>
       </aside>
@@ -315,7 +266,7 @@ function Step({
         className={cn(
           "flex size-7 shrink-0 items-center justify-center rounded-full font-mono text-xs font-medium",
           state === "done" && "bg-ink text-ground",
-          state === "current" && "bg-accent text-white",
+          state === "current" && "bg-accent text-on-accent",
           (state === "upcoming" || state === "skipped") && "border border-control text-muted",
         )}
       >

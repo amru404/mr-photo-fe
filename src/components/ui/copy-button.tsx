@@ -4,7 +4,7 @@ import { useState, type ReactNode } from "react";
 import { Check, Copy } from "lucide-react";
 import { Button } from "./button";
 
-async function writeClipboard(text: string) {
+export async function writeClipboard(text: string) {
   try {
     await navigator.clipboard.writeText(text);
   } catch {

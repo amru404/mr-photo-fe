@@ -67,8 +67,8 @@ export function Lightbox({
           <X className="size-6" />
         </button>
         <div className="min-w-0 flex-1 text-center">
-          <p className="text-sm font-semibold tabular">{position}</p>
-          <p className="truncate text-xs text-viewer-muted">{label}</p>
+          <p className="font-mono text-[13px] font-medium tabular">{position}</p>
+          <p className="truncate font-mono text-[11px] text-viewer-muted">{label}</p>
         </div>
         <span className="size-12" />
       </div>

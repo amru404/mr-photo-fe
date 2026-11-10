@@ -93,7 +93,8 @@ export function describe(item: FeedItem): ReactNode {
     case "delivery.folder_connected":
       return "You connected the delivery folder";
     case "payment.confirmed":
-      return "You confirmed payment";
+      // Older entries have no percent: they were always full payments.
+      return typeof meta.percent === "number" && meta.percent < 100 ? `You recorded a ${meta.percent}% down payment` : "You confirmed full payment";
     case "payment.unconfirmed":
       return "You marked payment as not received";
     case "project.share_link_regenerated":

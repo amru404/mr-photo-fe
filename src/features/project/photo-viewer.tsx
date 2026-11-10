@@ -3,8 +3,8 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { ChevronLeft, ChevronRight, Expand, Heart, ImageIcon, MessageSquare, Minimize, Star } from "lucide-react";
 import { cn } from "@/lib/cn";
-import { number } from "@/lib/format";
-import type { Comment } from "@/lib/types";
+import { dateTime, fileSize, number } from "@/lib/format";
+import type { Comment, PhotoDetails } from "@/lib/types";
 import { CommentList } from "./comment-list";
 
 export interface ViewerPhoto {
@@ -14,6 +14,7 @@ export interface ViewerPhoto {
   is_selected?: boolean;
   is_cover?: boolean;
   comments_count?: number;
+  details?: PhotoDetails;
 }
 
 const grid = (url: string) => `${url}${url.includes("?") ? "&" : "?"}size=grid`;
@@ -24,8 +25,8 @@ export function frame(n: number, total: number) {
 }
 
 /**
- * The selected photo large in the middle, the previous one peeking in from
- * the left and the photo's details on the right; under it the count with
+ * The selected photo large in the middle, its comments on the left and its
+ * details on the right; under it the count with
  * previous / next and a strip of large thumbnails. ← → move, F toggles
  * fullscreen, where only the photo itself is shown.
  */
@@ -60,8 +61,7 @@ export function PhotoViewer({
   const [fullscreen, setFullscreen] = useState(false);
   const [loaded, setLoaded] = useState<number | null>(null);
   const photo = photos[index];
-  const previous = photos[index - 1];
-
+  
   const prev = useCallback(() => (index > 0 ? onIndex(index - 1) : onPrev?.()), [index, onIndex, onPrev]);
   const next = useCallback(() => (index < photos.length - 1 ? onIndex(index + 1) : onNext?.()), [index, photos.length, onIndex, onNext]);
 
@@ -110,31 +110,29 @@ export function PhotoViewer({
 
   return (
     <div className="space-y-4">
-      <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_300px] 2xl:grid-cols-[200px_minmax(0,1fr)_320px]">
-        {/* The previous photo, peeking in from the left. */}
-        <button
-          type="button"
-          onClick={prev}
-          disabled={!canPrev}
-          aria-label="Previous photo"
-          className="group relative hidden overflow-hidden rounded-[16px] border border-line bg-surface disabled:opacity-40 2xl:block"
-        >
-          {previous?.thumbnail_url ? (
-            <img src={grid(previous.thumbnail_url)} alt="" className="absolute inset-0 size-full object-cover opacity-50 transition-opacity group-hover:opacity-80" />
-          ) : (
-            <span className="absolute inset-0 flex items-center justify-center text-xs text-faint">{canPrev ? "Previous page" : "First photo"}</span>
-          )}
-          <span className="absolute bottom-3 start-3 flex size-9 items-center justify-center rounded-full bg-black/50 text-white backdrop-blur">
-            <ChevronLeft className="size-4" />
-          </span>
-        </button>
+      <div className="grid gap-4 xl:grid-cols-[300px_minmax(0,1fr)_300px]">
+        {/* Comments on the left. */}
+        <aside className="order-2 flex min-w-0 flex-col gap-4 rounded-[16px] border border-line bg-surface p-5 xl:order-1 xl:h-[min(64dvh,720px)] xl:min-h-[360px]">
+          <div className="flex items-center justify-between">
+            <p className="text-xs font-semibold text-muted">Comments</p>
+            {commentCount > 0 && (
+              <Tag>
+                <MessageSquare className="size-3" /> {number(commentCount)}
+              </Tag>
+            )}
+          </div>
+          <div className="min-h-0 flex-1 overflow-y-auto">
+            {photoComments.length > 0 ? <CommentList comments={photoComments} /> : <p className="text-sm text-faint">No comments on this photo.</p>}
+          </div>
+          {aside}
+        </aside>
 
         {/* The stage: this element alone goes fullscreen. */}
         <div
           ref={stage}
           className={cn(
-            "group relative flex items-center justify-center overflow-hidden bg-viewer",
-            fullscreen ? "h-screen w-screen" : "h-[min(64dvh,720px)] min-h-[360px] rounded-[16px] ring-2 ring-accent",
+            "group relative order-1 flex items-center justify-center overflow-hidden bg-viewer xl:order-2",
+            fullscreen ? "h-screen w-screen" : "h-[min(64dvh,720px)] min-h-[360px] rounded-[16px] border border-line",
           )}
         >
           {photo.thumbnail_url ? (
@@ -177,12 +175,12 @@ export function PhotoViewer({
           </div>
 
           {/* Arrows: always in fullscreen, on small screens where the side cards are hidden. */}
-          <StageArrow side="left" disabled={!canPrev} onClick={prev} className={fullscreen ? "opacity-0 group-hover:opacity-100" : "2xl:hidden"} />
+          <StageArrow side="left" disabled={!canPrev} onClick={prev} className={fullscreen ? "opacity-0 group-hover:opacity-100" : undefined} />
           <StageArrow side="right" disabled={!canNext} onClick={next} className={fullscreen ? "opacity-0 group-hover:opacity-100" : undefined} />
         </div>
 
         {/* The photo's details on the right. */}
-        <aside className="flex min-w-0 flex-col gap-4 rounded-[16px] border border-line bg-surface p-5">
+        <aside className="order-3 flex min-w-0 flex-col gap-4 rounded-[16px] border border-line bg-surface p-5 xl:h-[min(64dvh,720px)] xl:min-h-[360px]">
           <div className="text-center">
             <p className="font-mono text-[11px] uppercase tracking-[0.1em] text-faint">Photo {frame(position, total)}</p>
             <h3 className="mt-1 break-all text-base font-semibold text-ink">{photo.filename}</h3>
@@ -191,7 +189,7 @@ export function PhotoViewer({
           <ul className="flex flex-wrap justify-center gap-1.5">
             {photo.is_selected ? (
               <Tag tone="accent">
-                <Heart className="size-3" fill="currentColor" /> Client pick
+                <Heart className="size-3 text-love" fill="currentColor" /> Client pick
               </Tag>
             ) : (
               <Tag>Not picked</Tag>
@@ -201,25 +199,15 @@ export function PhotoViewer({
                 <Star className="size-3" /> Cover
               </Tag>
             )}
-            {commentCount > 0 && (
-              <Tag>
-                <MessageSquare className="size-3" /> {number(commentCount)}
-              </Tag>
-            )}
           </ul>
 
-          <div className="min-h-0 flex-1 overflow-y-auto border-t border-rule pt-4">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted">Comments</p>
-            {photoComments.length > 0 ? <CommentList comments={photoComments} /> : <p className="mt-2 text-sm text-faint">No comments on this photo.</p>}
-          </div>
-
-          {aside}
+          <DetailList details={photo.details} filename={photo.filename} />
 
           <button
             type="button"
             onClick={next}
             disabled={!canNext}
-            className="hidden h-10 items-center justify-center gap-1.5 rounded-[10px] bg-raised text-sm font-medium text-ink hover:bg-active disabled:opacity-40 lg:flex"
+            className="mt-auto hidden h-10 items-center justify-center gap-1.5 rounded-[10px] bg-raised text-sm font-medium text-ink hover:bg-active disabled:opacity-40 lg:flex"
           >
             Next photo <ChevronRight className="size-4" />
           </button>
@@ -259,7 +247,7 @@ export function PhotoViewer({
                 aria-label={item.filename}
                 className={cn(
                   "relative block h-44 w-36 overflow-hidden rounded-[14px] border bg-surface transition sm:h-48 sm:w-40",
-                  active ? "border-accent ring-2 ring-accent" : "border-line opacity-70 hover:opacity-100",
+                  active ? "border-accent" : "border-line opacity-60 hover:opacity-100",
                 )}
               >
                 {item.thumbnail_url ? (
@@ -270,7 +258,7 @@ export function PhotoViewer({
                 <span className="absolute inset-x-2 top-2 flex items-start justify-between gap-1">
                   <span className="truncate rounded-[6px] bg-black/55 px-1.5 py-0.5 text-[10px] text-white backdrop-blur">{item.filename}</span>
                   {item.is_selected && (
-                    <span className="flex size-5 shrink-0 items-center justify-center rounded-full bg-accent">
+                    <span className="flex size-5 shrink-0 items-center justify-center rounded-full bg-love">
                       <Heart className="size-2.5 text-white" fill="currentColor" />
                     </span>
                   )}
@@ -317,6 +305,42 @@ function SquareButton({ label, disabled, onClick, children }: { label: string; d
     >
       {children}
     </button>
+  );
+}
+
+const TYPES: Record<string, string> = { "image/jpeg": "JPEG image", "image/png": "PNG image", "image/webp": "WebP image", "image/gif": "GIF image", "image/heic": "HEIC image", "image/tiff": "TIFF image" };
+
+function typeLabel(details: PhotoDetails | undefined, filename: string) {
+  const mime = details?.mime_type;
+  if (mime) return TYPES[mime] ?? mime;
+  const extension = filename.includes(".") ? filename.split(".").pop() : null;
+  return extension ? `${extension.toUpperCase()} image` : null;
+}
+
+function DetailList({ details, filename }: { details?: PhotoDetails; filename: string }) {
+  const rows: [string, string | null][] = [
+    ["Type", typeLabel(details, filename)],
+    ["Size", details?.file_size ? fileSize(details.file_size) : null],
+    ["Dimensions", details?.width && details.height ? `${number(details.width)} × ${number(details.height)}` : null],
+    ["Owner", details?.owner ?? null],
+    ["Modified", details?.modified_at ? dateTime(details.modified_at) : null],
+    ["Created", details?.created_at ? dateTime(details.created_at) : null],
+  ];
+  const shown = rows.filter((row): row is [string, string] => row[1] !== null);
+  if (shown.length === 0) return null;
+
+  return (
+    <div className="min-h-0 overflow-y-auto border-t border-rule pt-4">
+      <p className="text-xs font-semibold text-muted">Details</p>
+      <dl className="mt-2 space-y-2.5 text-sm">
+        {shown.map(([label, value]) => (
+          <div key={label}>
+            <dt className="text-xs text-faint">{label}</dt>
+            <dd className="text-ink">{value}</dd>
+          </div>
+        ))}
+      </dl>
+    </div>
   );
 }
 

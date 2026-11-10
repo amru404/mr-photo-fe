@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { cn } from "@/lib/cn";
+import { STATUS_TONE } from "@/lib/status-tone";
 import type { ProjectStatusValue, Status } from "@/lib/types";
 
 export type Tone = "neutral" | "accent" | "positive" | "warning" | "negative" | "info";
@@ -17,7 +18,7 @@ export function Pill({ tone = "neutral", children, className }: { tone?: Tone; c
   return (
     <span
       className={cn(
-        "inline-flex h-5 flex-none items-center gap-1 whitespace-nowrap rounded-chip px-1.5 text-xs font-medium",
+        "inline-flex h-5 flex-none items-center gap-1 whitespace-nowrap rounded-chip px-2 text-[11px] font-medium",
         TONES[tone],
         className,
       )}
@@ -27,25 +28,15 @@ export function Pill({ tone = "neutral", children, className }: { tone?: Tone; c
   );
 }
 
-const STATUS_CLASSES: Record<ProjectStatusValue, string> = {
-  draft: "bg-status-draft-soft text-status-draft",
-  selection: "bg-status-selection-soft text-status-selection",
-  editing: "bg-status-editing-soft text-status-editing",
-  completed: "bg-status-completed-soft text-status-completed",
-  expired: "bg-status-expired-soft text-status-expired",
-};
-
-/** One badge per project status, mapped here instead of in every view. */
+/** One tag per project status, in its Overview station colour. */
 export function StatusBadge({ status, className }: { status: Status; className?: string }) {
+  const tone = STATUS_TONE[status.value as ProjectStatusValue];
   return (
     <span
-      className={cn(
-        "inline-flex h-6 flex-none items-center gap-1.5 whitespace-nowrap rounded-chip px-2 text-xs font-medium",
-        STATUS_CLASSES[status.value],
-        className,
-      )}
+      className={cn("inline-flex h-6 flex-none items-center gap-1.5 whitespace-nowrap rounded-chip px-2 text-[11px] font-medium", className)}
+      style={{ background: tone.t, color: tone.d }}
     >
-      <span className="size-1.5 rounded-full bg-current" aria-hidden="true" />
+      <span className="size-1.5 rounded-full" style={{ background: tone.r }} aria-hidden="true" />
       {status.label}
     </span>
   );

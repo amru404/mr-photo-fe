@@ -37,9 +37,14 @@ export function Dialog({
   return (
     <dialog
       ref={ref}
-      onClose={onClose}
+      onClose={(event) => {
+        // React bubbles these through the component tree, so a dialog opened from inside another must not close its parent.
+        event.stopPropagation();
+        onClose();
+      }}
       onCancel={(event) => {
         event.preventDefault();
+        event.stopPropagation();
         onClose();
       }}
       onClick={(event) => {

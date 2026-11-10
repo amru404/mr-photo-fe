@@ -3,20 +3,23 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { ChevronDown, LogOut, Menu, Plus, UserRound, X } from "lucide-react";
+import { ArrowUpRight, ChevronDown, ClipboardList, LogOut, Menu, UserRound, X } from "lucide-react";
 import { Wordmark } from "@/components/brand";
-import { ButtonLink } from "@/components/ui/button";
-import { ThemeToggle } from "@/components/ui/theme-toggle";
+import { ThemeSwitch } from "@/components/ui/theme-toggle";
 import { Skeleton } from "@/components/ui/spinner";
 import { api } from "@/lib/api";
 import { useRequireUser, useSetUser } from "@/lib/auth";
 import { cn } from "@/lib/cn";
 import { initial } from "@/lib/format";
 import type { User } from "@/lib/types";
+import { useBookingLink, usePendingBookingCount } from "@/features/bookings/use-bookings";
 
 const NAV = [
   { href: "/dashboard", label: "Overview", match: (path: string) => path === "/dashboard" },
+  { href: "/schedule", label: "Schedule", match: (path: string) => path.startsWith("/schedule") },
+  { href: "/bookings", label: "Bookings", match: (path: string) => path.startsWith("/bookings") },
   { href: "/projects", label: "Projects", match: (path: string) => path.startsWith("/projects") && path !== "/projects/new" },
+  { href: "/clients", label: "Clients", match: (path: string) => path.startsWith("/clients") },
   { href: "/activity", label: "Activity", match: (path: string) => path.startsWith("/activity") },
 ];
 
@@ -58,10 +61,11 @@ function AccountMenu({ user }: { user: User }) {
         onClick={() => setOpen((value) => !value)}
         aria-expanded={open}
         aria-haspopup="menu"
-        className="flex h-9 items-center gap-1.5 rounded-full ps-0.5 pe-2 text-muted transition-colors hover:bg-raised hover:text-ink"
+        className="flex h-10 items-center gap-2.5 rounded-full ps-3 pe-1 text-muted transition-colors hover:bg-raised hover:text-ink"
       >
-        <span className="flex size-8 items-center justify-center rounded-full bg-ink text-[13px] font-semibold text-ground">{initial(user.name)}</span>
+        <span className="max-w-[160px] truncate text-[13px] font-medium text-ink">{user.name}</span>
         <ChevronDown className="size-3.5" />
+        <span className="flex size-8 items-center justify-center rounded-full bg-ink text-[13px] font-semibold text-ground">{initial(user.name)}</span>
         <span className="sr-only">Account menu</span>
       </button>
 
@@ -76,6 +80,7 @@ function AccountMenu({ user }: { user: User }) {
               <UserRound className="size-4 text-muted" />
               Profile &amp; password
             </Link>
+            <BookingFormItem enabled={open && !user.must_verify_email} />
             <button
               role="menuitem"
               type="button"
@@ -102,6 +107,9 @@ export function AppShell({ children }: { children: ReactNode }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const pathname = usePathname();
   const logout = useLogout();
+  // Requests waiting for approval, as a small count on the Bookings tab.
+  const pendingBookings = usePendingBookingCount(!!user && !user.must_verify_email);
+  const badge = (href: string) => (href === "/bookings" && pendingBookings > 0 ? pendingBookings : null);
 
   useEffect(() => setMenuOpen(false), [pathname]);
   useEffect(() => {
@@ -110,26 +118,27 @@ export function AppShell({ children }: { children: ReactNode }) {
 
   return (
     <div className="min-h-dvh">
-      <header className="sticky top-0 z-40 bg-ground/85 backdrop-blur supports-[backdrop-filter]:bg-ground/70">
-        <div className="relative flex h-16 items-center gap-6 px-4 sm:px-6 lg:px-10">
+      <header className="sticky top-0 z-40 bg-surface shadow-bar">
+        <div className="relative flex h-14 items-center gap-6 px-4 sm:px-6 lg:px-10">
           <Wordmark />
 
-          {/* Section chips, centred like a control deck. */}
-          <nav aria-label="Main" className="absolute left-1/2 hidden -translate-x-1/2 md:block">
-            <ul className="flex items-center gap-1 rounded-[12px] border border-line bg-surface p-1">
+          {/* Section tabs, centred: plain text, the active one in ink with a safelight line along the bottom of the bar. */}
+          <nav aria-label="Main" className="absolute inset-y-0 left-1/2 hidden -translate-x-1/2 md:block">
+            <ul className="flex h-full items-stretch gap-1">
               {NAV.map(({ href, label, match }) => {
                 const active = match(pathname);
                 return (
-                  <li key={href}>
+                  <li key={href} className="flex">
                     <Link
                       href={href}
                       aria-current={active ? "page" : undefined}
                       className={cn(
-                        "flex h-8 items-center rounded-[8px] px-4 text-[12px] font-semibold uppercase tracking-[0.06em] transition-colors",
-                        active ? "bg-ink text-ground" : "text-muted hover:bg-raised hover:text-ink",
+                        "relative flex items-center px-3 text-xs font-semibold transition-colors after:absolute after:inset-x-3 after:bottom-0 after:h-0.5 after:rounded-full after:transition-colors",
+                        active ? "text-ink after:bg-accent" : "text-muted after:bg-transparent hover:text-ink",
                       )}
                     >
                       {label}
+                      {badge(href) !== null && <NavBadge count={badge(href)!} label="booking requests waiting" />}
                     </Link>
                   </li>
                 );
@@ -138,10 +147,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           </nav>
 
           <div className="ms-auto flex items-center gap-2">
-            <ButtonLink href="/projects/new" variant="primary" size="sm" icon={<Plus className="size-4" />} className="hidden sm:inline-flex">
-              New project
-            </ButtonLink>
-            <ThemeToggle className="hidden size-9 rounded-[10px] border border-line bg-surface md:inline-flex" />
+            <ThemeSwitch className="hidden md:inline-flex" />
             <div className="hidden md:block">{user ? <AccountMenu user={user} /> : <Skeleton className="size-9 rounded-full" />}</div>
             <button
               type="button"
@@ -180,10 +186,14 @@ export function AppShell({ children }: { children: ReactNode }) {
                       className={cn("flex h-12 items-center rounded-control px-3 text-lg", match(pathname) ? "bg-surface font-semibold text-ink" : "text-muted")}
                     >
                       {label}
+                      {badge(href) !== null && <NavBadge count={badge(href)!} label="booking requests waiting" />}
                     </Link>
                   </li>
                 ),
               )}
+              <li>
+                <BookingFormItem enabled={!!user && !user.must_verify_email} sheet />
+              </li>
             </ul>
           </nav>
           {user && (
@@ -193,7 +203,7 @@ export function AppShell({ children }: { children: ReactNode }) {
                 <span className="block truncate text-sm font-medium">{user.name}</span>
                 <span className="block truncate text-xs text-muted">{user.email}</span>
               </span>
-              <ThemeToggle />
+              <ThemeSwitch />
               <button type="button" onClick={logout} aria-label="Log out" className="flex size-9 items-center justify-center rounded-control text-muted hover:bg-raised">
                 <LogOut className="size-4" />
               </button>
@@ -204,6 +214,43 @@ export function AppShell({ children }: { children: ReactNode }) {
 
       <main className="min-w-0">{user ? children : <ShellLoading />}</main>
     </div>
+  );
+}
+
+/** Opens the public booking form, the page clients fill in, in a new tab. */
+function BookingFormItem({ enabled, sheet = false }: { enabled: boolean; sheet?: boolean }) {
+  const link = useBookingLink(enabled);
+  const url = link.data?.url;
+  return (
+    <a
+      role="menuitem"
+      href={url ?? "#"}
+      target="_blank"
+      rel="noopener noreferrer"
+      aria-disabled={!url}
+      onClick={(event) => {
+        if (!url) event.preventDefault();
+      }}
+      className={cn(
+        "flex items-center gap-2.5 rounded-control hover:bg-raised aria-disabled:opacity-60",
+        // The phone sheet's rows are bigger and grey; the account menu's are compact and ink.
+        sheet ? "h-12 px-3 text-lg text-muted" : "h-9 px-2.5 text-sm text-ink",
+      )}
+    >
+      {!sheet && <ClipboardList className="size-4 text-muted" />}
+      <span className="flex-1">Booking form</span>
+      <ArrowUpRight className="size-3.5 text-faint" aria-hidden="true" />
+    </a>
+  );
+}
+
+/** A small ink count next to a tab label. */
+function NavBadge({ count, label }: { count: number; label: string }) {
+  return (
+    <span className="ms-1.5 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-ink px-1 font-mono text-[10px] font-medium leading-none text-ground tabular">
+      {count > 99 ? "99+" : count}
+      <span className="sr-only"> {label}</span>
+    </span>
   );
 }
 

@@ -3,8 +3,8 @@
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { ArrowUpRight, ChevronDown, ChevronLeft, ChevronRight, RotateCcw, X } from "lucide-react";
-import { ButtonLink } from "@/components/ui/button";
+import { ArrowUpRight, Check, ChevronDown, ChevronLeft, ChevronRight, Link2, RotateCcw, X } from "lucide-react";
+import { Button, ButtonLink } from "@/components/ui/button";
 import { EmptyState, LoadError } from "@/components/ui/notice";
 import { Skeleton } from "@/components/ui/spinner";
 import { api } from "@/lib/api";
@@ -13,23 +13,25 @@ import { cn } from "@/lib/cn";
 import { count, longDate, number, relative, shortDate } from "@/lib/format";
 import type { Overview, OverviewProject } from "@/lib/types";
 import { useTitle } from "@/lib/use-title";
+import { DpProofPill, PendingDot, RequestActions, requestWhen } from "@/features/bookings/request-actions";
+import { useBookingLink, useCopyBookingLink } from "@/features/bookings/use-bookings";
 import { mountStudio, STUDIO_COLORS, type StudioScene, type StudioStation } from "./studio-scene";
 
 // --- Stations ---------------------------------------------------------------
 
 const STATIONS: (StudioStation & { hint: string })[] = [
-  { label: "Set up", color: "purple", hint: "Gallery created, not shared for picking yet" },
+  { label: "Set up", color: "purple", hint: "Booked or set up, not shared for picking yet" },
   { label: "Picking", color: "blue", hint: "The client is choosing favorites" },
   { label: "Review", color: "teal", hint: "Picks are in, waiting for you" },
   { label: "Editing", color: "coral", hint: "You are editing the picks" },
-  { label: "Payment", color: "amber", hint: "Delivered, payment not confirmed" },
-  { label: "Done", color: "green", hint: "Delivered and settled" },
+  { label: "Done", color: "green", hint: "Delivered to the client" },
 ];
 
+/** Payment is a flag on the project, not a station: completed is Done whether paid or not. */
 function stationOf(p: OverviewProject): number {
   switch (p.status.value) {
     case "completed":
-      return p.requires_payment && !p.paid_at ? 4 : 5;
+      return 4;
     case "editing":
       return 3;
     case "draft":
@@ -51,17 +53,19 @@ function facts(p: OverviewProject, station: number): [string, ReactNode][] {
   const picked = `${number(p.selections_count)}${p.max_selectable_photos ? ` of ${p.max_selectable_photos}` : ""}`;
   switch (station) {
     case 0:
-      return [["Frames", number(p.photos_count)], ["Shoot", p.shoot_date ? longDate(p.shoot_date) : "—"], ["Category", p.category ?? "—"]];
+      return [["Frames", p.has_photos_folder === false ? "Not connected" : number(p.photos_count)], ["Shoot", p.shoot_date ? longDate(p.shoot_date) : "—"], ["Category", p.category ?? "—"]];
     case 1:
       return [["Picked", picked], ["Link", p.share_expired ? <span className="text-negative">Expired</span> : "Active"], ["Due", due(p)]];
     case 2:
       return [["Picked", picked], ["Submitted", p.selection_submitted_at ? relative(p.selection_submitted_at) : "—"], ["Due", due(p)]];
     case 3:
       return [["To edit", number(p.selections_count)], ["Finals synced", number(p.finals_count)], ["Due", due(p)]];
-    case 4:
-      return [["Finals", number(p.finals_count)], ["Payment", <span className="text-status-selection">Awaiting</span>], ["Updated", relative(p.updated_at)]];
     default:
-      return [["Finals", number(p.finals_count)], ["Payment", p.requires_payment ? "Paid" : "Not required"], ["Shoot", p.shoot_date ? longDate(p.shoot_date) : "—"]];
+      return [
+        ["Finals", number(p.finals_count)],
+        ["Payment", p.is_paid ? "Paid" : p.paid_percent > 0 ? <span className="text-status-selection">DP {p.paid_percent}%</span> : <span className="text-status-selection">Not paid yet</span>],
+        ["Shoot", p.shoot_date ? longDate(p.shoot_date) : "—"],
+      ];
   }
 }
 
@@ -70,7 +74,7 @@ type Flag = "review" | "overdue" | "unpaid" | "picking";
 const FLAGS: Record<Flag, { label: string; tone: "bad" | "warn" | "info"; test: (p: OverviewProject, station: number) => boolean }> = {
   review: { label: "Selections to review", tone: "warn", test: (_, s) => s === 2 },
   overdue: { label: "Overdue stages", tone: "bad", test: (p) => !!p.stage?.is_overdue },
-  unpaid: { label: "Unpaid deliveries", tone: "warn", test: (p) => p.requires_payment && !p.paid_at && ["editing", "completed"].includes(p.status.value) },
+  unpaid: { label: "Unpaid deliveries", tone: "warn", test: (p) => !p.is_paid && ["editing", "completed"].includes(p.status.value) },
   picking: { label: "Clients still picking", tone: "info", test: (_, s) => s === 1 },
 };
 
@@ -118,6 +122,12 @@ export function OverviewScreen() {
         >
           Share a Google Drive folder, paste its link, and your client gets a private gallery to pick favorites.
         </EmptyState>
+        {/* Requests can arrive before the first project; accepting one creates it. */}
+        {data && (
+          <div className="mx-auto mt-4 max-w-sm">
+            <BookingRequestsDeck data={data.booking_requests} />
+          </div>
+        )}
       </div>
     );
 
@@ -127,12 +137,12 @@ export function OverviewScreen() {
   const flagCount = (flag: Flag) => placed.filter((p) => FLAGS[flag].test(p.project, p.station)).length;
 
   return (
-    <div className="px-4 pb-10 sm:px-6 lg:px-10">
+    <div className="px-4 pb-10 pt-5 sm:px-6 lg:px-10">
       <StationChips active={active} counts={counts} total={placed.length} onSelect={select} />
 
       <div className="mt-4 grid gap-4 lg:grid-cols-[280px_minmax(0,1fr)] 2xl:grid-cols-[300px_minmax(0,1fr)_360px]">
         {/* Left deck */}
-        <div className="order-2 space-y-4 lg:order-1">
+        <div className={cn("order-2 flex min-h-0 flex-col gap-4 lg:order-1", ROW_HEIGHT)}>
           <Deck title="Studio data">
             <dl className="space-y-1.5">
               {(
@@ -178,12 +188,12 @@ export function OverviewScreen() {
             <p className="mt-2.5 text-[11px] text-faint">Switch on to narrow the project list on the right.</p>
           </Deck>
 
-          <Deck title="Needs you" aside={<span className="font-mono text-xs text-faint">{data.attention.length}</span>}>
+          <Deck title="Needs you" grow aside={<span className="font-mono text-xs text-faint">{data.attention.length}</span>}>
             {data.attention.length === 0 ? (
               <p className="text-[13px] text-muted">All clear. Nothing is waiting on you.</p>
             ) : (
               <ul className="-mx-1 space-y-0.5">
-                {data.attention.slice(0, 5).map((item, index) => (
+                {data.attention.map((item, index) => (
                   <li key={`${item.project.id}-${item.kind}-${index}`}>
                     <Link href={`/projects/${item.project.id}?tab=${item.tab}`} className="group flex items-start gap-2.5 rounded-[8px] px-1 py-1.5 hover:bg-raised">
                       <span
@@ -206,7 +216,7 @@ export function OverviewScreen() {
         </div>
 
         {/* The studio */}
-        <section className="relative order-1 flex flex-col overflow-hidden rounded-[20px] border border-line bg-surface lg:order-2">
+        <section className={cn("relative order-1 flex min-h-[420px] flex-col overflow-hidden rounded-[20px] border border-line bg-surface lg:order-2", ROW_HEIGHT)}>
           <div aria-hidden="true" className="pointer-events-none absolute inset-0 opacity-60 [background-image:linear-gradient(var(--rule)_1px,transparent_1px),linear-gradient(90deg,var(--rule)_1px,transparent_1px)] [background-size:44px_44px]" />
           <div className="relative flex items-start justify-between gap-4 p-5">
             <div>
@@ -230,7 +240,8 @@ export function OverviewScreen() {
         </section>
 
         {/* Right deck: the filtered projects */}
-        <aside className="order-3 lg:col-span-2 2xl:col-span-1">
+        <aside className="order-3 flex min-h-0 flex-col gap-4 lg:col-span-2 2xl:col-span-1 2xl:h-[clamp(560px,calc(100dvh_-_150px),760px)]">
+          <BookingRequestsDeck data={data.booking_requests} />
           <ProjectPanel
             active={active}
             list={list}
@@ -253,6 +264,12 @@ export function OverviewScreen() {
   );
 }
 
+/**
+ * One height for the left deck, the studio and the right deck on wide screens,
+ * so the row reads as a single band; long decks scroll inside it.
+ */
+const ROW_HEIGHT = "lg:h-[clamp(560px,calc(100dvh_-_150px),760px)]";
+
 // --- Pieces -----------------------------------------------------------------
 
 function StationChips({ active, counts, total, onSelect }: { active: number; counts: number[]; total: number; onSelect: (i: number) => void }) {
@@ -263,18 +280,7 @@ function StationChips({ active, counts, total, onSelect }: { active: number; cou
       <button type="button" onClick={() => nudge(-1)} aria-label="Scroll stages left" className="flex size-9 shrink-0 items-center justify-center rounded-[10px] border border-line bg-surface text-muted hover:text-ink md:hidden">
         <ChevronLeft className="size-4" />
       </button>
-      <div ref={strip} className="no-scrollbar flex gap-1.5 overflow-x-auto rounded-[14px] border border-line bg-surface p-1">
-        <Chip on={active < 0} onClick={() => onSelect(-1)}>
-          All <span className="font-mono text-[11px] opacity-60">{total}</span>
-        </Chip>
-        {STATIONS.map((station, i) => (
-          <Chip key={station.label} on={active === i} onClick={() => onSelect(i)}>
-            <span className="size-2 rounded-full" style={{ background: STUDIO_COLORS[station.color].r }} />
-            {station.label}
-            <span className="font-mono text-[11px] opacity-60">{counts[i]}</span>
-          </Chip>
-        ))}
-      </div>
+     
       <button type="button" onClick={() => nudge(1)} aria-label="Scroll stages right" className="flex size-9 shrink-0 items-center justify-center rounded-[10px] border border-line bg-surface text-muted hover:text-ink md:hidden">
         <ChevronRight className="size-4" />
       </button>
@@ -289,7 +295,7 @@ function Chip({ on, onClick, children }: { on: boolean; onClick: () => void; chi
       aria-pressed={on}
       onClick={onClick}
       className={cn(
-        "flex h-8 shrink-0 items-center gap-2 whitespace-nowrap rounded-[10px] px-3.5 text-[12px] font-semibold uppercase tracking-[0.05em] transition-colors",
+        "flex h-8 shrink-0 items-center gap-2 whitespace-nowrap rounded-[10px] px-3.5 text-[13px] font-semibold transition-colors",
         on ? "bg-ink text-ground" : "text-muted hover:bg-raised hover:text-ink",
       )}
     >
@@ -319,19 +325,72 @@ function Studio({ active, counts, onSelect }: { active: number; counts: number[]
 }
 
 /** A floating deck panel with a collapsible body, like the reference's side controls. */
-function Deck({ title, aside, children }: { title: string; aside?: ReactNode; children: ReactNode }) {
+function Deck({ title, aside, grow, children }: { title: string; aside?: ReactNode; grow?: boolean; children: ReactNode }) {
   const [open, setOpen] = useState(true);
   return (
-    <section className="rounded-[16px] border border-line bg-surface">
+    // Fixed decks keep their size; a growing deck takes what's left of the column and scrolls inside.
+    <section className={cn("flex min-h-0 flex-col rounded-[16px] border border-line bg-surface", grow && open ? "flex-1" : "shrink-0")}>
       <button type="button" onClick={() => setOpen((v) => !v)} aria-expanded={open} className="flex w-full items-center justify-between gap-3 px-4 py-3">
-        <span className="text-[12px] font-semibold uppercase tracking-[0.08em] text-ink">{title}</span>
+        <span className="text-[13px] font-semibold text-ink">{title}</span>
         <span className="flex items-center gap-2">
           {aside}
           <ChevronDown className={cn("size-4 text-faint transition-transform", !open && "-rotate-90")} />
         </span>
       </button>
-      {open && <div className="border-t border-rule px-4 pb-4 pt-3">{children}</div>}
+      {open && <div className="min-h-0 flex-1 overflow-y-auto border-t border-rule px-4 pb-4 pt-3">{children}</div>}
     </section>
+  );
+}
+
+/** Pending requests from the public booking form, soonest shoot first, each with Accept and Decline. */
+function BookingRequestsDeck({ data }: { data: Overview["booking_requests"] | undefined }) {
+  const items = (data?.items ?? []).slice(0, 5);
+  const pending = data?.pending ?? items.length;
+  // Fetched ahead only when the copy button shows, so the click can copy at once.
+  useBookingLink(items.length === 0);
+  const { copy, copied } = useCopyBookingLink();
+  return (
+    <Deck
+      title="Booking requests"
+      aside={<span className="min-w-7 rounded-[8px] bg-raised px-1.5 py-0.5 text-center font-mono text-xs text-ink tabular">{number(pending)}</span>}
+    >
+      {items.length === 0 ? (
+        <>
+          <p className="text-[13px] text-muted">No requests waiting</p>
+          <Button
+            size="sm"
+            className="mt-3"
+            onClick={copy}
+            icon={copied ? <Check className="size-4 text-positive" strokeWidth={2.5} /> : <Link2 className="size-4" />}
+          >
+            {copied ? "Copied" : "Copy booking link"}
+          </Button>
+        </>
+      ) : (
+        <ul className="-mx-4 max-h-[280px] divide-y divide-rule overflow-y-auto px-4">
+          {items.map((request) => (
+            <li key={request.id} className="flex items-start gap-2.5 py-2.5 first:pt-0">
+              <PendingDot className="mt-1.5 size-2 border-faint" />
+              <div className="min-w-0 flex-1">
+                <div className="flex min-w-0 items-center gap-2">
+                  <Link href={`/bookings/${request.id}`} className="block min-w-0 truncate text-[13px] font-medium text-ink hover:underline hover:underline-offset-2">{request.name}</Link>
+                  {(request.payment_proof || request.has_payment_proof) && <DpProofPill />}
+                </div>
+                <p className="truncate font-mono text-[11px] text-muted tabular">{requestWhen(request.shoot_date, request.shoot_time)}</p>
+                <p className="truncate text-xs text-muted">{request.location}</p>
+                <RequestActions request={request} className="mt-2" />
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
+      <div className="mt-3 flex items-center justify-between gap-3 border-t border-rule pt-3 text-xs">
+        <Link href="/bookings" className="font-semibold text-ink underline underline-offset-4">
+          See all
+        </Link>
+        {pending > items.length && <span className="font-mono text-[11px] text-faint tabular">+{number(pending - items.length)} more</span>}
+      </div>
+    </Deck>
   );
 }
 
@@ -375,11 +434,11 @@ function ProjectPanel({
   const color = station ? STUDIO_COLORS[station.color] : null;
 
   return (
-    <section className="flex max-h-[760px] flex-col rounded-[16px] border border-line bg-surface 2xl:h-full">
+    <section className="flex max-h-[760px] min-h-0 flex-col rounded-[16px] border border-line bg-surface 2xl:max-h-none 2xl:flex-1">
       <header className="flex items-center gap-3 border-b border-rule px-4 py-3">
         {color && <span className="size-2.5 shrink-0 rounded-full" style={{ background: color.r }} />}
         <div className="min-w-0 flex-1">
-          <p className="text-[12px] font-semibold uppercase tracking-[0.08em] text-ink">{station ? station.label : "All projects"}</p>
+          <p className="text-[13px] font-semibold text-ink">{station ? station.label : "All projects"}</p>
           <p className="truncate text-xs text-muted">
             {count(list.length, "project")}
             {filters.length > 0 && ` · ${filters.join(" or ")}`}
@@ -447,7 +506,7 @@ function BottomCard({ title, children, className, highlight }: { title: string; 
         className,
       )}
     >
-      <h2 className="text-center text-[12px] font-semibold uppercase tracking-[0.1em]">{title}</h2>
+      <h2 className="text-center text-[13px] font-semibold">{title}</h2>
       {children}
     </section>
   );
@@ -506,7 +565,7 @@ function DeadlineCard({ deadlines }: { deadlines: Overview["deadlines"] }) {
       ) : (
         <>
           <div className="mt-4 flex justify-center">
-            <span className={cn("rounded-[8px] px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.06em] text-white", next.is_overdue ? "bg-negative" : "bg-accent")}>
+            <span className={cn("rounded-[8px] px-2.5 py-1 text-xs font-semibold", next.is_overdue ? "bg-negative text-white" : "bg-accent text-on-accent")}>
               {next.is_overdue ? `Overdue ${count(Math.max(1, -next.days_left), "day")}` : next.days_left === 0 ? "Due today" : `In ${count(next.days_left, "day")}`}
             </span>
           </div>
@@ -521,7 +580,7 @@ function DeadlineCard({ deadlines }: { deadlines: Overview["deadlines"] }) {
                 </li>
               ))}
             </ul>
-            <Link href={`/projects/${next.project.id}?tab=timeline`} className="shrink-0 text-xs font-semibold uppercase tracking-[0.06em] underline underline-offset-4">
+            <Link href={`/projects/${next.project.id}?tab=timeline`} className="shrink-0 text-xs font-semibold underline underline-offset-4">
               Open
             </Link>
           </div>
@@ -533,7 +592,7 @@ function DeadlineCard({ deadlines }: { deadlines: Overview["deadlines"] }) {
 
 function DeliveredCard({ data, counts }: { data: Overview; counts: number[] }) {
   const total = Math.max(1, data.kpis.projects);
-  const delivered = counts[4] + counts[5];
+  const delivered = counts[4];
   const percent = Math.round((delivered / total) * 100);
   return (
     <BottomCard title="Delivery rate" className="text-start">
@@ -558,7 +617,7 @@ function DeliveredCard({ data, counts }: { data: Overview; counts: number[] }) {
               </li>
             ))}
           </ul>
-          <Link href="/activity" className="mt-4 inline-block text-xs font-semibold uppercase tracking-[0.06em] text-ink underline underline-offset-4">
+          <Link href="/activity" className="mt-4 inline-block text-xs font-semibold text-ink underline underline-offset-4">
             View activity
           </Link>
         </div>

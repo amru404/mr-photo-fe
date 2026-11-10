@@ -3,20 +3,19 @@
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { keepPreviousData, useInfiniteQuery, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ChevronRight, Heart, MessageSquare } from "lucide-react";
-import { Button, buttonClass } from "@/components/ui/button";
+import { Check, ChevronRight, Heart, ImageIcon, Lock, MessageSquare } from "lucide-react";
 import { useToast } from "@/components/ui/feedback";
 import { FieldError, Textarea } from "@/components/ui/field";
 import { Meter } from "@/components/ui/meter";
-import { Notice } from "@/components/ui/notice";
+import { EmptyState } from "@/components/ui/notice";
 import { Segmented } from "@/components/ui/segmented";
 import { Skeleton } from "@/components/ui/spinner";
 import { api, ApiError, query } from "@/lib/api";
 import { cn } from "@/lib/cn";
-import { number, plural, relative } from "@/lib/format";
+import { count, number, plural, relative } from "@/lib/format";
 import type { GalleryInfo, GalleryPhoto, GalleryPhotoDetail, GalleryPhotoPage } from "@/lib/types";
 import { useQueryState } from "@/lib/use-query-state";
-import { BottomBar, GalleryFooter, GalleryHeader } from "./gallery-chrome";
+import { ActionButton, actionClass, BottomBar, CountPill, GalleryFooter, GalleryHeader, Note, PAGE, Placeholder } from "./gallery-chrome";
 import { Lightbox } from "./lightbox";
 import { ProgressTracker } from "./progress-tracker";
 import { galleryKey, useOnLocked } from "./use-gallery";
@@ -106,33 +105,40 @@ export function ProofingGallery({ token, gallery }: { token: string; gallery: Ga
     <>
       <GalleryHeader brand={gallery.brand_name} title={gallery.title} />
 
-      <div className="mx-auto max-w-[1240px] px-4 pt-5 sm:px-6">
+      <div className={cn(PAGE, "pt-5")}>
         <ProgressTracker steps={gallery.progress} />
 
-        <div className="mt-5">
+        <div className="mt-4">
           {locked ? (
-            <Notice tone="success">
-              {gallery.selection_submitted_at ? (
+            gallery.selection_submitted_at ? (
+              <Note tone="positive" icon={<Check strokeWidth={2.5} />}>
+                <span className="font-semibold text-ink">Selection sent.</span> Your picks are locked. Contact {gallery.brand_name} if you need changes.
+              </Note>
+            ) : (
+              <Note tone="neutral" icon={<Lock />}>
+                <span className="font-semibold text-ink">Selection is closed.</span> You can still browse the photos.
+              </Note>
+            )
+          ) : (
+            <Note tone="accent">
+              <span className="font-semibold text-ink">Hi {gallery.client_name ?? "there"}!</span> Tap{" "}
+              <Heart className="inline size-3.5 -translate-y-px fill-love text-love" aria-label="the heart" /> on the photos you love
+              {max ? (
                 <>
-                  <span className="font-semibold">Selection sent.</span> Your picks are locked. Contact {gallery.brand_name} if you need changes.
+                  {" "}
+                  (up to <span className="font-mono text-ink">{number(max)}</span>)
                 </>
               ) : (
-                <>
-                  <span className="font-semibold">Selection is closed.</span> You can still browse the photos.
-                </>
+                ""
               )}
-            </Notice>
-          ) : (
-            <p className="text-[15px] leading-6 text-ink">
-              Hi {gallery.client_name ?? "there"}! Tap <Heart className="inline size-4 -translate-y-px fill-accent text-accent" aria-label="the heart" /> on the
-              photos you love{max ? ` (up to ${max})` : ""}, then review and send your selection.
-            </p>
+              , then review and send your selection.
+            </Note>
           )}
         </div>
 
         <Segmented<View>
-          className="mt-5"
-          size="lg"
+          variant="chips"
+          className="mt-4"
           label="Photos"
           value={view}
           onChange={(value) => url.set({ view: value }, { defaults: { view: "all" } })}
@@ -143,38 +149,36 @@ export function ProofingGallery({ token, gallery }: { token: string; gallery: Ga
         />
       </div>
 
-      <main className="mx-auto mt-4 max-w-[1240px] px-1 sm:px-6">
+      <main className={cn(PAGE, "mt-4")}>
         {photos.isPending ? (
           <TileSkeleton />
         ) : tiles.length === 0 ? (
-          <div className="mx-3 rounded-card border border-line bg-surface px-6 py-14 text-center sm:mx-0">
-            {view === "favorites" ? (
-              <>
-                <p className="text-base font-semibold">No favorites yet</p>
-                <p className="mt-1 text-sm text-muted">Tap the heart on any photo to add it here.</p>
-                <Button variant="primary" size="lg" className="mt-5" onClick={() => url.set({ view: null })}>
+          view === "favorites" ? (
+            <EmptyState
+              title="No favorites yet"
+              action={
+                <ActionButton onClick={() => url.set({ view: null })}>
                   Browse all photos
-                </Button>
-              </>
-            ) : (
-              <>
-                <p className="text-base font-semibold">Photos are on their way</p>
-                <p className="mt-1 text-sm text-muted">{gallery.brand_name} is still preparing this gallery. Check back soon.</p>
-              </>
-            )}
-          </div>
+                </ActionButton>
+              }
+            >
+              Tap the heart on any photo to add it here.
+            </EmptyState>
+          ) : (
+            <EmptyState title="Photos are on their way">{gallery.brand_name} is still preparing this gallery. Check back soon.</EmptyState>
+          )
         ) : (
           <>
-            <ul className="grid grid-cols-2 gap-x-1 gap-y-2 sm:grid-cols-3 sm:gap-x-2 sm:gap-y-3 md:grid-cols-4 lg:grid-cols-5">
+            <ul className={GRID}>
               {tiles.map((photo) => (
                 <Tile key={photo.id} photo={photo} locked={locked} onOpen={() => setActiveId(photo.id)} onToggle={() => toggleFavorite(photo)} />
               ))}
             </ul>
             {photos.hasNextPage && (
               <div ref={sentinel} className="flex justify-center py-8">
-                <Button size="lg" loading={photos.isFetchingNextPage} onClick={() => photos.fetchNextPage()}>
+                <ActionButton variant="secondary" loading={photos.isFetchingNextPage} onClick={() => photos.fetchNextPage()}>
                   Load more photos
-                </Button>
+                </ActionButton>
               </div>
             )}
           </>
@@ -184,20 +188,22 @@ export function ProofingGallery({ token, gallery }: { token: string; gallery: Ga
       <GalleryFooter />
 
       <BottomBar>
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-3 sm:gap-4">
           <div className="min-w-0 flex-1">
-            <p className="text-sm font-semibold text-ink tabular">
-              {number(selectedCount)} {plural(selectedCount, "photo")} selected
-              {max && <span className="font-normal text-muted"> of {max}</span>}
-            </p>
-            {max ? (
-              <Meter value={selectedCount} max={max} tone={atLimit ? "warning" : "accent"} className="mt-1.5" label="Photos selected" />
-            ) : (
-              !locked && <p className="text-xs text-muted">No limit, pick as many as you like</p>
-            )}
+            <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1">
+              <CountPill className={cn(atLimit && "text-status-selection")}>
+                {number(selectedCount)}
+                {max ? ` / ${number(max)}` : ""} <span className="sr-only">{plural(selectedCount, "photo")}</span> selected
+              </CountPill>
+              {!max && !locked && <span className="truncate text-xs text-muted">No limit, pick as many as you like</span>}
+              {max && !locked && (
+                <span className="hidden text-xs text-muted sm:inline">{atLimit ? "Limit reached" : `${count(max - selectedCount, "pick")} left`}</span>
+              )}
+            </div>
+            {max ? <Meter value={selectedCount} max={max} tone={atLimit ? "warning" : "accent"} className="mt-2 max-w-xs" label="Photos selected" /> : null}
           </div>
           {gallery.selection_submitted_at ? (
-            <Link href={`/g/${token}/submitted`} className={buttonClass("secondary", "lg")}>
+            <Link href={`/g/${token}/submitted`} className={actionClass("secondary")}>
               View summary
             </Link>
           ) : (
@@ -206,7 +212,7 @@ export function ProofingGallery({ token, gallery }: { token: string; gallery: Ga
                 href={`/g/${token}/review`}
                 aria-disabled={selectedCount === 0 || undefined}
                 tabIndex={selectedCount === 0 ? -1 : undefined}
-                className={buttonClass("primary", "lg", "gap-1.5")}
+                className={actionClass("primary")}
               >
                 Review
                 <ChevronRight className="size-4" />
@@ -232,18 +238,39 @@ export function ProofingGallery({ token, gallery }: { token: string; gallery: Ga
   );
 }
 
+/** The photo grid of the project screen: framed cards, rounded frames, gap-3. */
+const GRID = "grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5";
+
 function Tile({ photo, locked, onOpen, onToggle }: { photo: GalleryPhoto; locked: boolean; onOpen: () => void; onToggle: () => void }) {
   return (
-    <li className="min-w-0">
-      <div className="relative aspect-square overflow-hidden bg-raised">
-        <button type="button" onClick={onOpen} className="block size-full" aria-label={`Open ${photo.filename}`}>
-          {photo.grid_url && (
-            <img src={photo.grid_url} alt="" loading="lazy" decoding="async" className="size-full object-cover" />
+    <li
+      className={cn(
+        "min-w-0 rounded-card border bg-surface p-1.5 transition-colors",
+        photo.is_selected ? "border-accent" : "border-line hover:border-control",
+      )}
+    >
+      <div className="relative aspect-square overflow-hidden rounded-[10px] bg-raised">
+        <button type="button" onClick={onOpen} className="group block size-full" aria-label={`Open ${photo.filename}`}>
+          {photo.grid_url ? (
+            <img
+              src={photo.grid_url}
+              alt=""
+              loading="lazy"
+              decoding="async"
+              className="size-full object-cover transition-transform duration-300 group-hover:scale-[1.04]"
+            />
+          ) : (
+            <span className="flex size-full items-center justify-center text-faint">
+              <ImageIcon className="size-5" aria-hidden="true" />
+            </span>
           )}
         </button>
 
         {photo.comments_count > 0 && (
-          <span className="pointer-events-none absolute start-2 top-2 inline-flex items-center gap-1 rounded-chip bg-surface px-1.5 py-0.5 text-[11px] font-medium text-ink tabular">
+          <span
+            className="pointer-events-none absolute start-2 top-2 inline-flex items-center gap-1 rounded-chip bg-surface/90 px-1.5 py-0.5 font-mono text-[11px] text-ink shadow-sm tabular"
+            title={count(photo.comments_count, "comment")}
+          >
             <MessageSquare className="size-3" aria-hidden="true" />
             {photo.comments_count}
           </span>
@@ -256,12 +283,12 @@ function Tile({ photo, locked, onOpen, onToggle }: { photo: GalleryPhoto; locked
             disabled={locked}
             aria-pressed={photo.is_selected}
             aria-label={photo.is_selected ? "Remove from favorites" : "Add to favorites"}
-            className="absolute bottom-1 end-1 flex size-11 items-center justify-center rounded-full transition-transform active:scale-90 disabled:cursor-default"
+            className="group/heart absolute bottom-0 end-0 flex size-11 items-center justify-center rounded-full transition-transform active:scale-90 disabled:cursor-default"
           >
             <span
               className={cn(
-                "flex size-8 items-center justify-center rounded-full transition-colors",
-                photo.is_selected ? "bg-accent text-white dark:text-on-primary" : "bg-surface text-ink",
+                "flex size-8 items-center justify-center rounded-full shadow-sm transition-colors",
+                photo.is_selected ? "bg-love text-white" : "bg-surface/90 text-ink group-hover/heart:bg-surface",
               )}
             >
               <Heart className={cn("size-4", photo.is_selected && "fill-current")} strokeWidth={2} />
@@ -269,7 +296,7 @@ function Tile({ photo, locked, onOpen, onToggle }: { photo: GalleryPhoto; locked
           </button>
         )}
       </div>
-      <p className="mt-1 truncate px-1 text-xs text-muted sm:px-0" title={photo.filename}>
+      <p className="truncate px-1 pb-0.5 pt-1.5 font-mono text-[11px] text-muted" title={photo.filename}>
         {photo.filename}
       </p>
     </li>
@@ -354,47 +381,47 @@ function PhotoViewer({
       }}
       prefetch={[fullUrl(photo?.previous_id), fullUrl(photo?.next_id)]}
       footer={
-        <div className="rounded-t-[14px] bg-surface text-ink safe-bottom">
-          <div className="mx-auto flex max-w-xl items-center gap-3 px-4 py-3">
+        <div className="rounded-t-board border-t border-line bg-surface text-ink safe-bottom">
+          <div className="mx-auto flex max-w-xl items-center gap-2.5 px-4 py-3">
             {showFavorite && (
-              <Button
-                size="lg"
-                variant={photo.is_selected ? "accent" : "secondary"}
+              <ActionButton
+                variant={photo.is_selected ? "love" : "secondary"}
                 disabled={locked}
                 aria-pressed={photo.is_selected}
-                className="flex-1 transition-transform active:scale-[0.98]"
-                icon={<Heart className={cn("size-5", photo.is_selected && "fill-current")} />}
+                className="flex-1 active:scale-[0.98]"
+                icon={<Heart className={cn("size-4", photo.is_selected && "fill-current")} />}
                 onClick={async () => {
                   await onToggle(photo);
                   client.invalidateQueries({ queryKey: detailKey });
                 }}
               >
                 {photo.is_selected ? "Favorited" : atLimit ? "Limit reached" : "Add to favorites"}
-              </Button>
+              </ActionButton>
             )}
             {photo && (gallery.allow_comments || photo.comments.length > 0) && (
-              <Button
-                size="lg"
+              <ActionButton
+                variant="secondary"
                 aria-expanded={commentsOpen}
-                icon={<MessageSquare className="size-5" />}
+                icon={<MessageSquare className="size-4" />}
                 onClick={() => setCommentsOpen((value) => !value)}
                 className={cn(!showFavorite && "flex-1")}
               >
-                {photo.comments.length || "Comment"}
-              </Button>
+                {photo.comments.length ? <span className="font-mono tracking-normal tabular">{photo.comments.length}</span> : "Comment"}
+              </ActionButton>
             )}
           </div>
 
           {commentsOpen && photo && (
-            <div className="mx-auto max-w-xl border-t border-line px-4 pb-4">
+            <div className="mx-auto max-w-xl border-t border-rule px-4 pb-4">
               {photo.comments.length > 0 && (
                 <ul className="max-h-48 space-y-3 overflow-y-auto pt-4">
                   {photo.comments.map((comment) => (
                     <li key={comment.id}>
-                      <p className="text-xs font-medium text-muted">
-                        {comment.is_client ? "You" : gallery.brand_name} · {relative(comment.created_at)}
+                      <p className="flex items-baseline gap-1.5 text-xs font-semibold text-ink">
+                        {comment.is_client ? "You" : gallery.brand_name}
+                        <span className="font-mono text-[11px] font-normal text-faint">· {relative(comment.created_at)}</span>
                       </p>
-                      <p className="mt-0.5 whitespace-pre-line break-words text-sm text-ink">{comment.body}</p>
+                      <p className="mt-0.5 whitespace-pre-line break-words text-[13px] text-muted">{comment.body}</p>
                     </li>
                   ))}
                 </ul>
@@ -416,14 +443,14 @@ function PhotoViewer({
                       onChange={(e) => setBody(e.target.value)}
                       invalid={!!error}
                     />
-                    <Button type="submit" variant="primary" className="h-11" loading={sending}>
+                    <ActionButton type="submit" loading={sending}>
                       Send
-                    </Button>
+                    </ActionButton>
                   </div>
                   <FieldError message={error} />
                 </form>
               ) : (
-                photo.comments.length === 0 && <p className="pt-4 text-sm text-muted">No comments on this photo.</p>
+                photo.comments.length === 0 && <p className="pt-4 text-[13px] text-muted">No comments on this photo.</p>
               )}
             </div>
           )}
@@ -435,14 +462,13 @@ function PhotoViewer({
 
 function TileSkeleton() {
   return (
-    <div className="grid grid-cols-2 gap-x-1 gap-y-2 sm:grid-cols-3 sm:gap-x-2 md:grid-cols-4 lg:grid-cols-5">
+    <div className={GRID}>
       {Array.from({ length: 10 }, (_, index) => (
-        <div key={index}>
-          <Skeleton className="aspect-square w-full rounded-none" />
-          <Skeleton className="mt-1.5 h-3 w-2/3" />
+        <div key={index} className="rounded-card border border-line bg-surface p-1.5">
+          <Placeholder className="aspect-square w-full rounded-[10px]" />
+          <Skeleton className="mx-1 mb-0.5 mt-2 h-3 w-2/3" />
         </div>
       ))}
     </div>
   );
 }
-

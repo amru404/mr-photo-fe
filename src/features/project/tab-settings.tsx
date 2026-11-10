@@ -1,8 +1,10 @@
 "use client";
 
 import { useState, type ReactNode } from "react";
+import Link from "next/link";
+import { Mail, Pencil, Phone, UserRound } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
-import { Button } from "@/components/ui/button";
+import { Button, ButtonLink } from "@/components/ui/button";
 import { CopyButton } from "@/components/ui/copy-button";
 import { useConfirm } from "@/components/ui/feedback";
 import { Checkbox, Field, Hint, Input, PasswordInput } from "@/components/ui/field";
@@ -10,7 +12,7 @@ import { Pill } from "@/components/ui/pill";
 import { SwitchRow } from "@/components/ui/switch";
 import { api } from "@/lib/api";
 import { cn } from "@/lib/cn";
-import { longDate, relative } from "@/lib/format";
+import { dateTime, longDate, relative } from "@/lib/format";
 import type { ProjectDetail } from "@/lib/types";
 import { useForm } from "@/lib/use-form";
 import { projectKey, useSetProject } from "./use-project";
@@ -23,25 +25,33 @@ function initialValues(project: ProjectDetail) {
     max_selectable_photos: project.max_selectable_photos === null ? "" : String(project.max_selectable_photos),
     allow_comments: project.allow_comments,
     allow_download: project.allow_download,
-    requires_payment: project.requires_payment,
   };
 }
 
-/** Settings row: what it is (and its current value) on the left, the panel on the right. */
+/** One settings card: what it is (and its current value) on the left, the controls on the right. */
 function Section({ title, description, summary, children }: { title: string; description: string; summary?: ReactNode; children: ReactNode }) {
   return (
-    <section className="grid gap-4 border-t border-line py-8 first:border-t-0 first:pt-0 lg:grid-cols-[340px_minmax(0,1fr)] lg:gap-12">
+    <section className="grid gap-5 rounded-card border border-line bg-surface p-5 lg:grid-cols-[300px_minmax(0,1fr)] lg:gap-10 lg:p-6">
       <div>
-        <h2 className="text-base font-semibold text-ink">{title}</h2>
-        <p className="mt-1 text-sm text-muted">{description}</p>
+        <h2 className="deck-title">{title}</h2>
+        <p className="mt-1.5 text-[13px] text-muted">{description}</p>
         {summary && <div className="mt-4">{summary}</div>}
       </div>
-      <div className="min-w-0 max-w-3xl">{children}</div>
+      <div className="min-w-0">{children}</div>
     </section>
   );
 }
 
-export function SettingsTab({ project }: { project: ProjectDetail }) {
+function Fact({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <div className="min-w-0">
+      <dt className="text-xs text-muted">{label}</dt>
+      <dd className="mt-0.5 truncate font-medium text-ink">{children}</dd>
+    </div>
+  );
+}
+
+export function SettingsTab({ project, onEditClient }: { project: ProjectDetail; onEditClient: () => void }) {
   const client = useQueryClient();
   const confirm = useConfirm();
   const setProject = useSetProject(project.id);
@@ -90,13 +100,73 @@ export function SettingsTab({ project }: { project: ProjectDetail }) {
   const { values } = form;
 
   return (
-    <div>
+    <div className="space-y-4">
+      <Section title="Client" description="Who this project is for and how to reach them.">
+        <div>
+          <dl className="grid gap-x-6 gap-y-4 text-[13px] sm:grid-cols-2">
+            <Fact label="Name">
+              {project.client ? (
+                <Link href={`/clients/${project.client.id}`} className="hover:underline">
+                  {project.client.name}
+                </Link>
+              ) : (
+                project.client_name || <span className="text-faint">Not added</span>
+              )}
+            </Fact>
+            <Fact label="Email">
+              {project.client_email ? (
+                <a href={`mailto:${project.client_email}`} className="inline-flex min-w-0 items-center gap-1.5 hover:underline">
+                  <Mail className="size-3.5 shrink-0 text-faint" />
+                  <span className="truncate">{project.client_email}</span>
+                </a>
+              ) : (
+                <span className="text-faint">Not added</span>
+              )}
+            </Fact>
+            <Fact label="Phone">
+              {project.client_phone ? (
+                <span className="flex min-w-0 items-center gap-2">
+                  <a href={`tel:${project.client_phone}`} className="inline-flex min-w-0 items-center gap-1.5 hover:underline">
+                    <Phone className="size-3.5 shrink-0 text-faint" />
+                    <span className="truncate">{project.client_phone}</span>
+                  </a>
+                  {project.whatsapp_url && (
+                    <a href={project.whatsapp_url} target="_blank" rel="noopener noreferrer" className="shrink-0 font-medium text-positive hover:underline">
+                      WhatsApp
+                    </a>
+                  )}
+                </span>
+              ) : (
+                <span className="text-faint">Not added</span>
+              )}
+            </Fact>
+            <Fact label="Last seen">
+              {project.last_viewed_at ? (
+                <span title={dateTime(project.last_viewed_at)}>Opened {relative(project.last_viewed_at)}</span>
+              ) : (
+                <span className="text-faint">Not opened yet</span>
+              )}
+            </Fact>
+          </dl>
+          <div className="mt-4 flex flex-wrap justify-end gap-2 border-t border-line pt-4">
+            {project.client && (
+              <ButtonLink href={`/clients/${project.client.id}`} size="sm" icon={<UserRound className="size-3.5" />}>
+                Client profile
+              </ButtonLink>
+            )}
+            <Button size="sm" icon={<Pencil className="size-3.5" />} onClick={onEditClient}>
+              Change client
+            </Button>
+          </div>
+        </div>
+      </Section>
+
       <Section
         title="Client link"
         description="Send this link to your client. They don't need an account."
         summary={regenerated && <p className="text-sm font-medium text-positive">New link generated. The old one no longer works.</p>}
       >
-        <div className="rounded-card bg-raised p-4">
+        <div>
           <div className="flex flex-col gap-2 sm:flex-row">
             <input
               readOnly
@@ -118,7 +188,7 @@ export function SettingsTab({ project }: { project: ProjectDetail }) {
         </div>
       </Section>
 
-      <form onSubmit={save} noValidate>
+      <form onSubmit={save} noValidate className="space-y-4">
         <Section
           title="Access"
           description="Protect the gallery and decide how long it stays open."
@@ -131,7 +201,7 @@ export function SettingsTab({ project }: { project: ProjectDetail }) {
             </ul>
           }
         >
-          <div className="grid gap-5 rounded-card bg-raised p-4 sm:grid-cols-2">
+          <div className="grid gap-5 sm:grid-cols-2">
             <div>
               <Field
                 label={project.has_password ? "Change password / PIN" : "Password / PIN"}
@@ -185,12 +255,12 @@ export function SettingsTab({ project }: { project: ProjectDetail }) {
               <Pill>{project.max_selectable_photos ? `Up to ${project.max_selectable_photos} picks` : "Unlimited picks"}</Pill>
               <Pill tone={project.allow_comments ? "accent" : "neutral"}>{project.allow_comments ? "Comments on" : "Comments off"}</Pill>
               <Pill tone={project.allow_download ? "accent" : "neutral"}>
-                {project.allow_download ? (project.requires_payment ? "Downloads after payment" : "Downloads on") : "Downloads off"}
+                {project.allow_download ? "Downloads on" : "Downloads off"}
               </Pill>
             </ul>
           }
         >
-          <div className="rounded-card bg-raised p-4">
+          <div>
             <Field label="Maximum photos the client can pick" error={form.error("max_selectable_photos")}>
               {(id) => (
                 <Input
@@ -209,20 +279,14 @@ export function SettingsTab({ project }: { project: ProjectDetail }) {
             <div className="mt-3 divide-y divide-line border-t border-line">
               <SwitchRow label="Allow comments" description="Clients can leave notes on individual photos." checked={values.allow_comments} onChange={(v) => form.set("allow_comments", v)} />
               <SwitchRow label="Allow downloads" description="Clients can download photos from the final delivery gallery." checked={values.allow_download} onChange={(v) => form.set("allow_download", v)} />
-              <SwitchRow
-                label="Require payment before download"
-                description="Downloads stay locked and previews watermarked until you confirm payment."
-                checked={values.requires_payment}
-                onChange={(v) => form.set("requires_payment", v)}
-              />
             </div>
           </div>
         </Section>
 
-        <div className={cn("sticky bottom-4 z-10 mt-2 flex items-center justify-end gap-3 rounded-card border border-line bg-surface px-4 py-3 shadow-float lg:ms-[388px]")}>
+        <div className={cn("sticky bottom-4 z-10 flex items-center justify-end gap-3 rounded-card border border-line bg-surface px-4 py-3 shadow-float")}>
           {saved ? <span className="text-sm text-positive">Saved.</span> : <span className="text-[13px] text-muted">Changes apply to the client&rsquo;s gallery immediately.</span>}
           <Button type="submit" variant="primary" loading={busy === "save"}>
-            Save sharing settings
+            Save settings
           </Button>
         </div>
       </form>

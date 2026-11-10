@@ -2,17 +2,26 @@
 
 import { useRouter } from "next/navigation";
 import { useState, type ReactNode } from "react";
-import { PageBody, PageHeader } from "@/components/app-shell";
+import { Pill } from "@/components/ui/pill";
 import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
 import { Field, Input, PasswordInput } from "@/components/ui/field";
 import { Notice } from "@/components/ui/notice";
-import { Panel, PanelFooter } from "@/components/ui/panel";
+import { PanelFooter } from "@/components/ui/panel";
+import { cn } from "@/lib/cn";
+import { initial } from "@/lib/format";
 import { api } from "@/lib/api";
 import { useSetUser, useUser } from "@/lib/auth";
 import type { User } from "@/lib/types";
 import { useForm } from "@/lib/use-form";
 import { useTitle } from "@/lib/use-title";
+import { CategoriesPanel } from "@/features/categories/categories-panel";
+import { CopyButton } from "@/components/ui/copy-button";
+import { useBookingLink, useRegenerateBookingLink } from "@/features/bookings/use-bookings";
+import { RefreshCw } from "lucide-react";
+
+const GRID_BACKGROUND =
+  "pointer-events-none absolute inset-0 opacity-60 [background-image:linear-gradient(var(--rule)_1px,transparent_1px),linear-gradient(90deg,var(--rule)_1px,transparent_1px)] [background-size:44px_44px]";
 
 export default function ProfilePage() {
   useTitle("Profile");
@@ -20,33 +29,93 @@ export default function ProfilePage() {
   if (!user) return null;
 
   return (
-    <PageBody width="wide">
-      <PageHeader title="Profile" description={user.email} />
-      <div className="mt-8 divide-y divide-line">
-        <Section title="Profile information" description="Your account's name and email address.">
+    <div className="px-4 pb-10 pt-5 sm:px-6 lg:px-10">
+      {/* The board: who is signed in, like the project page's header. */}
+      <section className="relative overflow-hidden rounded-board border border-line bg-surface">
+        <div aria-hidden="true" className={GRID_BACKGROUND} />
+        <div className="relative flex items-center gap-4 p-5">
+          <span className="flex size-14 shrink-0 items-center justify-center rounded-full bg-ink text-xl font-semibold text-ground">{initial(user.name)}</span>
+          <div className="min-w-0">
+            <p className="eyebrow">Account</p>
+            <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1">
+              <h1 className="min-w-0 truncate text-xl font-semibold tracking-[-0.02em] text-ink sm:text-2xl">{user.name}</h1>
+              <Pill tone={user.must_verify_email ? "warning" : "positive"}>{user.must_verify_email ? "Email unverified" : "Verified"}</Pill>
+            </div>
+            <p className="mt-0.5 truncate text-[13px] text-muted">
+              {user.email}
+              {user.brand_name && ` · ${user.brand_name}`}
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <div className="mt-4 grid items-start gap-4 lg:grid-cols-2">
+        <Deck title="Profile information" description="Your account's name and email address.">
           <ProfileForm user={user} />
-        </Section>
-        <Section title="Update password" description="Use a long, random password to keep your account secure.">
+        </Deck>
+        <Deck title="Update password" description="Use a long, random password to keep your account secure.">
           <PasswordForm />
-        </Section>
-        <Section title="Delete account" description="Permanently removes your account and everything in it.">
+        </Deck>
+        <Deck
+          title="Booking form"
+          description="Share this link so clients can request a shoot. Requests show on your schedule for you to accept or decline."
+          className="lg:col-span-2"
+        >
+          <BookingForm />
+        </Deck>
+        <Deck title="Project categories" description="Used to group projects. Deleting one keeps its projects, just without a category." className="lg:col-span-2">
+          <CategoriesPanel />
+        </Deck>
+        <Deck title="Delete account" description="Permanently removes your account and everything in it." className="border-status-expired/30 lg:col-span-2">
           <DeleteAccount />
-        </Section>
+        </Deck>
       </div>
-    </PageBody>
+    </div>
   );
 }
 
-/** Settings row: what it is on the left, the panel on the right. */
-function Section({ title, description, children }: { title: string; description: string; children: ReactNode }) {
+/** A settings deck: bold title and a grey line over a rule, then the form. */
+function Deck({ title, description, className, children }: { title: string; description: string; className?: string; children: ReactNode }) {
   return (
-    <section className="grid gap-4 py-8 first:pt-0 lg:grid-cols-[320px_minmax(0,1fr)] lg:gap-10">
-      <div className="lg:pt-1">
-        <h2 className="text-base font-medium text-ink">{title}</h2>
-        <p className="mt-1 text-sm text-muted">{description}</p>
-      </div>
-      <div className="max-w-2xl">{children}</div>
+    <section className={cn("overflow-hidden rounded-card border border-line bg-surface", className)}>
+      <header className="border-b border-rule px-5 py-4">
+        <h2 className="deck-title">{title}</h2>
+        <p className="mt-1.5 text-[13px] text-muted">{description}</p>
+      </header>
+      {children}
     </section>
+  );
+}
+
+function BookingForm() {
+  const link = useBookingLink();
+  const { regenerate, pending } = useRegenerateBookingLink();
+  return (
+    <div className="p-5">
+      <Field label="Public link" hint="Generating a new link makes the current one stop working.">
+        {(id) => (
+          <div className="flex flex-col gap-2 sm:flex-row">
+            <Input
+              id={id}
+              readOnly
+              value={link.data?.url ?? (link.isError ? "Couldn't load your link" : "Loading…")}
+              onFocus={(event) => event.target.select()}
+              className="min-w-0 flex-1 font-mono"
+            />
+            <div className="flex gap-2">
+              {link.data ? (
+                <CopyButton text={link.data.url}>Copy link</CopyButton>
+              ) : (
+                <Button disabled>Copy link</Button>
+              )}
+              <Button onClick={regenerate} loading={pending} disabled={!link.data} icon={<RefreshCw className="size-4" />}>
+                Generate new link
+              </Button>
+            </div>
+          </div>
+        )}
+      </Field>
+    </div>
   );
 }
 
@@ -83,7 +152,7 @@ function ProfileForm({ user }: { user: User }) {
 
   return (
     <form onSubmit={save} noValidate>
-      <Panel>
+      <div>
         <div className="space-y-4 p-5">
           <Field label="Name" error={form.error("name")}>
             {(id) => <Input id={id} autoComplete="name" value={form.values.name} onChange={(e) => form.set("name", e.target.value)} invalid={!!form.error("name")} />}
@@ -109,7 +178,7 @@ function ProfileForm({ user }: { user: User }) {
             Save
           </Button>
         </PanelFooter>
-      </Panel>
+      </div>
     </form>
   );
 }
@@ -138,7 +207,7 @@ function PasswordForm() {
 
   return (
     <form onSubmit={save} noValidate>
-      <Panel>
+      <div>
         <div className="space-y-4 p-5">
           <Field label="Current password" error={form.error("current_password")}>
             {(id) => (
@@ -174,7 +243,7 @@ function PasswordForm() {
             Save
           </Button>
         </PanelFooter>
-      </Panel>
+      </div>
     </form>
   );
 }
@@ -200,7 +269,7 @@ function DeleteAccount() {
   }
 
   return (
-    <Panel className="p-5">
+    <div className="p-5 pt-4">
       <p className="text-sm text-muted">
         Once your account is deleted, all of its projects and data are permanently deleted. Download anything you want to keep first.
       </p>
@@ -230,6 +299,6 @@ function DeleteAccount() {
           </Field>
         </form>
       </Dialog>
-    </Panel>
+    </div>
   );
 }
