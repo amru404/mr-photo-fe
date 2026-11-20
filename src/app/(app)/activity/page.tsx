@@ -11,7 +11,8 @@ import { cn } from "@/lib/cn";
 import { dayLabel } from "@/lib/format";
 import type { ActivityPage as ActivityPageData } from "@/lib/types";
 import { useTitle } from "@/lib/use-title";
-import { FeedRow, FeedSkeleton } from "@/features/activity/feed";
+import { FeedSkeleton } from "@/components/page-skeletons";
+import { FeedRow } from "@/features/activity/feed";
 
 const PER_PAGE = 10;
 

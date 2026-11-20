@@ -8,7 +8,7 @@ import { ButtonLink } from "@/components/ui/button";
 import { EmptyState, LoadError } from "@/components/ui/notice";
 import { PaymentBadge } from "@/components/ui/payment";
 import { Pill, StatusBadge } from "@/components/ui/pill";
-import { Skeleton } from "@/components/ui/spinner";
+import { GRID_BACKGROUND, PAGE, SheetSkeleton } from "@/components/page-skeletons";
 import { api, query } from "@/lib/api";
 import { cn } from "@/lib/cn";
 import { count } from "@/lib/format";
@@ -21,9 +21,6 @@ import { ScheduleBoardRow } from "./board";
 import { dayHeading, dayShort, isDay, isMonth, monthGrid, monthLabel, monthOf, parseDay, shiftMonth, shootTime, todayDay, WEEKDAYS } from "./dates";
 import { eventStatus } from "./event";
 import type { Schedule, ScheduleEvent, ScheduleRequest } from "./types";
-
-const GRID_BACKGROUND =
-  "pointer-events-none absolute inset-0 opacity-60 [background-image:linear-gradient(var(--rule)_1px,transparent_1px),linear-gradient(90deg,var(--rule)_1px,transparent_1px)] [background-size:44px_44px]";
 
 const newBookingHref = (day: string) => `/projects/new${query({ shoot_date: day })}`;
 
@@ -84,7 +81,7 @@ export function ScheduleScreen() {
   const goToday = () => url.set({ month: null, day: null });
 
   return (
-    <div className="px-4 pb-10 pt-5 sm:px-6 lg:px-10">
+    <div className={PAGE}>
       {/* The board: the month on the left, the selected day's sheet on the right. */}
       <section className="relative overflow-hidden rounded-board border border-line bg-surface">
         <div aria-hidden="true" className={GRID_BACKGROUND} />
@@ -440,24 +437,6 @@ function CopyBookingLink() {
     <IconButton label={copied ? "Booking link copied" : "Copy booking link"} onClick={copy}>
       {copied ? <Check className="size-4 text-positive" strokeWidth={2.5} /> : <Link2 className="size-4" />}
     </IconButton>
-  );
-}
-
-function SheetSkeleton() {
-  return (
-    <div className="space-y-2">
-      {[0, 1, 2].map((i) => (
-        <div key={i} className="rounded-[12px] border border-rule p-3">
-          <Skeleton className="h-3 w-16" />
-          <Skeleton className="mt-2 h-4 w-2/3" />
-          <Skeleton className="mt-1.5 h-3 w-1/2" />
-          <div className="mt-2.5 flex gap-1.5">
-            <Skeleton className="h-6 w-20" />
-            <Skeleton className="h-5 w-12" />
-          </div>
-        </div>
-      ))}
-    </div>
   );
 }
 

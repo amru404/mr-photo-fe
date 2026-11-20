@@ -16,7 +16,6 @@ import {
   MessageSquare,
   Plus,
 } from "lucide-react";
-import { Skeleton } from "@/components/ui/spinner";
 import { cn } from "@/lib/cn";
 import { dateTime, plural, relative, time } from "@/lib/format";
 import { SIZE_LABELS, STATUS_LABELS } from "@/lib/labels";
@@ -180,21 +179,5 @@ export function CompactFeedRow({ item }: { item: FeedItem }) {
         </div>
       </Link>
     </li>
-  );
-}
-
-export function FeedSkeleton({ rows = 5 }: { rows?: number }) {
-  return (
-    <ul>
-      {Array.from({ length: rows }, (_, index) => (
-        <li key={index} className="flex gap-3.5 border-t border-rule px-5 py-4 first:border-t-0">
-          <Skeleton className="size-8 rounded-full" />
-          <div className="flex-1">
-            <Skeleton className="h-4 w-3/5" />
-            <Skeleton className="mt-2 h-3 w-1/3" />
-          </div>
-        </li>
-      ))}
-    </ul>
   );
 }

@@ -15,7 +15,6 @@ import { useSetUser, useUser } from "@/lib/auth";
 import type { User } from "@/lib/types";
 import { useForm } from "@/lib/use-form";
 import { useTitle } from "@/lib/use-title";
-import { CategoriesPanel } from "@/features/categories/categories-panel";
 import { CopyButton } from "@/components/ui/copy-button";
 import { useBookingLink, useRegenerateBookingLink } from "@/features/bookings/use-bookings";
 import { RefreshCw } from "lucide-react";
@@ -62,9 +61,6 @@ export default function ProfilePage() {
           className="lg:col-span-2"
         >
           <BookingForm />
-        </Deck>
-        <Deck title="Project categories" description="Used to group projects. Deleting one keeps its projects, just without a category." className="lg:col-span-2">
-          <CategoriesPanel />
         </Deck>
         <Deck title="Delete account" description="Permanently removes your account and everything in it." className="border-status-expired/30 lg:col-span-2">
           <DeleteAccount />

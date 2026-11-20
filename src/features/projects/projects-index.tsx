@@ -10,7 +10,8 @@ import { CopyRowAction, RowAction, SortHeader, TABLE_HEAD, type SortState } from
 import { PaymentBadge } from "@/components/ui/payment";
 import { EmptyState, LoadError, Notice } from "@/components/ui/notice";
 import { Meter } from "@/components/ui/meter";
-import { Skeleton, Spinner } from "@/components/ui/spinner";
+import { Spinner } from "@/components/ui/spinner";
+import { CARD_GRID, CardsSkeleton, PAGE, PROJECT_TABLE_COLUMNS as TABLE_COLUMNS, ProjectTableSkeleton } from "@/components/page-skeletons";
 import { api, query } from "@/lib/api";
 import { cn } from "@/lib/cn";
 import { flash } from "@/lib/flash";
@@ -24,8 +25,8 @@ import { useClientOptions } from "@/features/clients/use-clients";
 
 type Layout = "cards" | "table";
 
-/** Compact cards: two on a phone, up to six across on a wide screen. */
-export const CARD_GRID = "grid grid-cols-2 gap-3 p-4 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6";
+// Shared with the client page, which lists a client's projects the same way.
+export { CARD_GRID, CardsSkeleton };
 
 export function ProjectsIndex() {
   useTitle("Projects");
@@ -67,7 +68,7 @@ export function ProjectsIndex() {
   const setStatus = (value: string) => url.set({ status: value, page: null });
 
   return (
-    <div className="px-4 pb-10 pt-5 sm:px-6 lg:px-10">
+    <div className={PAGE}>
       {created && (
         <Notice tone="success" className="mb-4">
           {created}
@@ -196,7 +197,7 @@ export function ProjectsIndex() {
         </header>
 
         {list.isPending ? (
-          <CardsSkeleton />
+          layout === "table" ? <ProjectTableSkeleton /> : <CardsSkeleton />
         ) : list.isError ? (
           <div className="p-4">
             <LoadError what="your projects" onRetry={() => list.refetch()} />
@@ -388,8 +389,6 @@ function CopyLinkButton({ url, className }: { url: string; className?: string })
   );
 }
 
-const TABLE_COLUMNS = "md:grid-cols-[56px_minmax(0,1.6fr)_minmax(0,1fr)_140px_76px_120px_96px_100px_104px]";
-
 function ProjectTable({ projects, sort, onSort }: { projects: ProjectSummary[]; sort: SortState; onSort: (next: SortState) => void }) {
   const head = (label: string, column: string, firstDirection: SortState["direction"] = "asc") => (
     <SortHeader label={label} column={column} state={sort} onSort={onSort} firstDirection={firstDirection} />
@@ -486,19 +485,5 @@ export function Pager({ meta, onPage }: { meta: Paginated; onPage: (page: number
         </button>
       </div>
     </nav>
-  );
-}
-
-export function CardsSkeleton() {
-  return (
-    <div className={CARD_GRID}>
-      {Array.from({ length: 12 }, (_, index) => (
-        <div key={index} className="rounded-[14px] border border-rule p-2">
-          <Skeleton className="aspect-[4/3] w-full rounded-[10px]" />
-          <Skeleton className="mt-2 h-4 w-2/3" />
-          <Skeleton className="mt-2 h-3 w-1/3" />
-        </div>
-      ))}
-    </div>
   );
 }

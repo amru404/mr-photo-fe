@@ -9,12 +9,12 @@ import { BackLink, PageBody } from "@/components/app-shell";
 import { ButtonLink } from "@/components/ui/button";
 import { useConfirm, useToast } from "@/components/ui/feedback";
 import { EmptyState, LoadError } from "@/components/ui/notice";
-import { Skeleton } from "@/components/ui/spinner";
+import { ClientDetailSkeleton } from "@/components/page-skeletons";
 import { api, ApiError } from "@/lib/api";
 import { count, longDate, number } from "@/lib/format";
 import type { ClientShow } from "@/lib/types";
 import { useTitle } from "@/lib/use-title";
-import { CARD_GRID, CardsSkeleton, ProjectCard } from "@/features/projects/projects-index";
+import { CARD_GRID, ProjectCard } from "@/features/projects/projects-index";
 import { ClientFormDialog } from "./client-form-dialog";
 import { clientKey, useInvalidateClients } from "./use-clients";
 
@@ -35,12 +35,7 @@ export function ClientDetailScreen({ id }: { id: string }) {
 
   if (show.isPending) {
     return (
-      <div className="px-4 pb-10 pt-5 sm:px-6 lg:px-10">
-        <Skeleton className="h-[188px] w-full rounded-board" />
-        <div className="mt-4 overflow-hidden rounded-board border border-line bg-surface">
-          <CardsSkeleton />
-        </div>
-      </div>
+      <ClientDetailSkeleton />
     );
   }
 

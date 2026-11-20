@@ -356,11 +356,7 @@ function Builder({ initial, queryId }: { initial: CategoryForm; queryId: string 
         <div className="relative flex flex-col gap-4 p-5 lg:flex-row lg:items-start lg:justify-between">
           <div className="min-w-0">
             <nav aria-label="Breadcrumb" className="eyebrow flex min-w-0 items-center gap-1.5">
-              <Link href="/profile" onClick={(event) => leave(event, "/profile")} className="hover:text-ink">
-                Profile
-              </Link>
-              <span aria-hidden="true">/</span>
-              <Link href="/profile" onClick={(event) => leave(event, "/profile")} className="hover:text-ink">
+              <Link href="/categories" onClick={(event) => leave(event, "/categories")} className="hover:text-ink">
                 Categories
               </Link>
               <span aria-hidden="true">/</span>

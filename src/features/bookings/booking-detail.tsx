@@ -7,7 +7,7 @@ import { ArrowUpRight, CalendarDays, Clock, Mail, MapPin, MessageCircle, Phone, 
 import { ButtonLink } from "@/components/ui/button";
 import { EmptyState, LoadError } from "@/components/ui/notice";
 import { Pill, StatusBadge } from "@/components/ui/pill";
-import { Skeleton } from "@/components/ui/spinner";
+import { BookingDetailSkeleton } from "@/components/page-skeletons";
 import { api, ApiError } from "@/lib/api";
 import { cn } from "@/lib/cn";
 import { dateTime, relative } from "@/lib/format";
@@ -48,13 +48,7 @@ export function BookingDetailScreen({ id }: { id: string }) {
 
   if (detail.isPending) {
     return (
-      <div className="px-4 pb-10 pt-5 sm:px-6 lg:px-10">
-        <Skeleton className="h-[150px] w-full rounded-board" />
-        <div className="mt-4 grid gap-4 lg:grid-cols-[minmax(0,1fr)_380px]">
-          <Skeleton className="h-72 rounded-card" />
-          <Skeleton className="h-72 rounded-card" />
-        </div>
-      </div>
+      <BookingDetailSkeleton />
     );
   }
 

@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { Banknote, Check, ExternalLink, FolderOpen, Pencil } from "lucide-react";
+import { Banknote, Check, ExternalLink, FolderOpen, FolderPen, Pencil } from "lucide-react";
 import { BackLink, PageBody } from "@/components/app-shell";
 import { Button } from "@/components/ui/button";
 import { CopyButton } from "@/components/ui/copy-button";
@@ -11,7 +11,7 @@ import { Dialog } from "@/components/ui/dialog";
 import { PaymentBar, paymentLabel, PaymentSlider, paymentState } from "@/components/ui/payment";
 import { EmptyState, LoadError } from "@/components/ui/notice";
 import { StatusBadge } from "@/components/ui/pill";
-import { Skeleton } from "@/components/ui/spinner";
+import { ProjectDetailSkeleton } from "@/components/page-skeletons";
 import { useToast } from "@/components/ui/feedback";
 import { api, ApiError } from "@/lib/api";
 import { cn } from "@/lib/cn";
@@ -24,7 +24,7 @@ import { STUDIO_COLORS } from "@/features/overview/studio-scene";
 import { detailPayload, detailValues, DetailsFields } from "@/features/projects/details-fields";
 import { useOptions } from "@/features/projects/use-options";
 import { DeliveryTab } from "./tab-delivery";
-import { PhotosTab } from "./tab-photos";
+import { ChangeFolderDialog, PhotosTab } from "./tab-photos";
 import { SelectionsTab } from "./tab-selections";
 import { SettingsTab } from "./tab-settings";
 import { TimelineTab } from "./tab-timeline";
@@ -44,6 +44,7 @@ type TabKey = (typeof TABS)[number]["key"];
 export function ProjectDetailScreen({ id }: { id: string }) {
   const project = useProject(id);
   const [editing, setEditing] = useState(false);
+  const [changingFolder, setChangingFolder] = useState(false);
   const [toolbar, setToolbar] = useState<HTMLDivElement | null>(null);
   const url = useQueryState();
   const requested = url.get("tab", "photos");
@@ -54,11 +55,7 @@ export function ProjectDetailScreen({ id }: { id: string }) {
 
   if (project.isPending) {
     return (
-      <div className="px-4 pb-10 pt-5 sm:px-6 lg:px-10">
-        <Skeleton className="h-[188px] w-full rounded-board" />
-        <Skeleton className="mt-4 h-[42px] w-[520px] max-w-full rounded-[12px]" />
-        <Skeleton className="mt-4 h-96 w-full rounded-card" />
-      </div>
+      <ProjectDetailSkeleton />
     );
   }
 
@@ -147,6 +144,11 @@ export function ProjectDetailScreen({ id }: { id: string }) {
                 <FolderOpen className="size-4" />
               </IconAction>
             )}
+            {data.has_photos_folder && (
+              <IconAction label="Change Drive folder" onClick={() => setChangingFolder(true)}>
+                <FolderPen className="size-4" />
+              </IconAction>
+            )}
             <IconAction label="Preview gallery" href={data.share_url}>
               <ExternalLink className="size-4" />
             </IconAction>
@@ -202,6 +204,7 @@ export function ProjectDetailScreen({ id }: { id: string }) {
       </div>
 
       {editing && <EditDetailsDialog project={data} onClose={() => setEditing(false)} />}
+      {changingFolder && <ChangeFolderDialog project={data} onClose={() => setChangingFolder(false)} />}
     </div>
   );
 }

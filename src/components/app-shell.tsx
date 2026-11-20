@@ -3,10 +3,11 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { ArrowUpRight, ChevronDown, ClipboardList, LogOut, Menu, UserRound, X } from "lucide-react";
+import { ArrowUpRight, ChevronDown, ClipboardList, LogOut, Menu, Tags, UserRound, X } from "lucide-react";
 import { Wordmark } from "@/components/brand";
 import { ThemeSwitch } from "@/components/ui/theme-toggle";
 import { Skeleton } from "@/components/ui/spinner";
+import { RouteSkeleton } from "@/components/page-skeletons";
 import { api } from "@/lib/api";
 import { useRequireUser, useSetUser } from "@/lib/auth";
 import { cn } from "@/lib/cn";
@@ -79,6 +80,10 @@ function AccountMenu({ user }: { user: User }) {
             <Link role="menuitem" href="/profile" className="flex h-9 items-center gap-2.5 rounded-control px-2.5 text-sm text-ink hover:bg-raised">
               <UserRound className="size-4 text-muted" />
               Profile &amp; password
+            </Link>
+            <Link role="menuitem" href="/categories" className="flex h-9 items-center gap-2.5 rounded-control px-2.5 text-sm text-ink hover:bg-raised">
+              <Tags className="size-4 text-muted" />
+              Project categories
             </Link>
             <BookingFormItem enabled={open && !user.must_verify_email} />
             <button
@@ -177,7 +182,12 @@ export function AppShell({ children }: { children: ReactNode }) {
           </div>
           <nav aria-label="Main" className="mt-6 flex-1">
             <ul className="space-y-1">
-              {[...NAV, { href: "/projects/new", label: "New project", match: (path: string) => path === "/projects/new" }, { href: "/profile", label: "Profile", match: (path: string) => path === "/profile" }].map(
+              {[
+                ...NAV,
+                { href: "/projects/new", label: "New project", match: (path: string) => path === "/projects/new" },
+                { href: "/profile", label: "Profile", match: (path: string) => path === "/profile" },
+                { href: "/categories", label: "Project categories", match: (path: string) => path.startsWith("/categories") },
+              ].map(
                 ({ href, label, match }) => (
                   <li key={href}>
                     <Link
@@ -212,7 +222,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         </div>
       )}
 
-      <main className="min-w-0">{user ? children : <ShellLoading />}</main>
+      <main className="min-w-0">{user ? children : <RouteSkeleton pathname={pathname} />}</main>
     </div>
   );
 }
@@ -254,16 +264,6 @@ function NavBadge({ count, label }: { count: number; label: string }) {
   );
 }
 
-function ShellLoading() {
-  return (
-    <div className="px-4 py-8 sm:px-6 lg:px-10">
-      <Skeleton className="h-8 w-48" />
-      <Skeleton className="mt-3 h-4 w-72" />
-      <Skeleton className="mt-8 h-64 w-full" />
-    </div>
-  );
-}
-
 /** Title row: an eyebrow, the noun as the h1, one grey line under it, actions on the right. */
 export function PageHeader({
   title,
@@ -295,7 +295,7 @@ export function PageBody({ children, width = "wide" }: { children: ReactNode; wi
   return (
     <div
       className={cn(
-        "mx-auto px-4 pb-20 pt-6 sm:px-6 sm:pt-8 lg:px-10",
+        "mx-auto px-4 pb-20 pt-5 sm:px-6 lg:px-10",
         width === "wide" && "max-w-none",
         width === "narrow" && "max-w-[960px]",
         width === "form" && "max-w-[760px]",

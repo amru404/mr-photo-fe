@@ -3,10 +3,10 @@
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { ArrowUpRight, Check, ChevronDown, ChevronLeft, ChevronRight, Link2, RotateCcw, X } from "lucide-react";
+import { ArrowUpRight, Check, ChevronDown, Link2, RotateCcw, X } from "lucide-react";
 import { Button, ButtonLink } from "@/components/ui/button";
 import { EmptyState, LoadError } from "@/components/ui/notice";
-import { Skeleton } from "@/components/ui/spinner";
+import { GRID_BACKGROUND, OVERVIEW_GRID, OVERVIEW_ROW_HEIGHT as ROW_HEIGHT, OverviewSkeleton, PAGE } from "@/components/page-skeletons";
 import { api } from "@/lib/api";
 import { useUser } from "@/lib/auth";
 import { cn } from "@/lib/cn";
@@ -105,13 +105,13 @@ export function OverviewScreen() {
   if (overview.isPending) return <OverviewSkeleton />;
   if (overview.isError)
     return (
-      <div className="px-4 py-8 sm:px-6 lg:px-10">
+      <div className={PAGE}>
         <LoadError what="your overview" onRetry={() => overview.refetch()} />
       </div>
     );
   if (!data || data.kpis.projects === 0)
     return (
-      <div className="px-4 py-10 sm:px-6 lg:px-10">
+      <div className={PAGE}>
         <EmptyState
           title={`Welcome${user ? `, ${user.name.split(" ")[0]}` : ""}`}
           action={
@@ -137,10 +137,8 @@ export function OverviewScreen() {
   const flagCount = (flag: Flag) => placed.filter((p) => FLAGS[flag].test(p.project, p.station)).length;
 
   return (
-    <div className="px-4 pb-10 pt-5 sm:px-6 lg:px-10">
-      <StationChips active={active} counts={counts} total={placed.length} onSelect={select} />
-
-      <div className="mt-4 grid gap-4 lg:grid-cols-[280px_minmax(0,1fr)] 2xl:grid-cols-[300px_minmax(0,1fr)_360px]">
+    <div className={PAGE}>
+      <div className={OVERVIEW_GRID}>
         {/* Left deck */}
         <div className={cn("order-2 flex min-h-0 flex-col gap-4 lg:order-1", ROW_HEIGHT)}>
           <Deck title="Studio data">
@@ -164,6 +162,7 @@ export function OverviewScreen() {
 
           <Deck
             title="Status filters"
+            grow
             aside={
               flags.length > 0 && (
                 <span
@@ -187,37 +186,11 @@ export function OverviewScreen() {
             </ul>
             <p className="mt-2.5 text-[11px] text-faint">Switch on to narrow the project list on the right.</p>
           </Deck>
-
-          <Deck title="Needs you" grow aside={<span className="font-mono text-xs text-faint">{data.attention.length}</span>}>
-            {data.attention.length === 0 ? (
-              <p className="text-[13px] text-muted">All clear. Nothing is waiting on you.</p>
-            ) : (
-              <ul className="-mx-1 space-y-0.5">
-                {data.attention.map((item, index) => (
-                  <li key={`${item.project.id}-${item.kind}-${index}`}>
-                    <Link href={`/projects/${item.project.id}?tab=${item.tab}`} className="group flex items-start gap-2.5 rounded-[8px] px-1 py-1.5 hover:bg-raised">
-                      <span
-                        className={cn(
-                          "mt-1.5 size-1.5 shrink-0 rounded-full",
-                          item.kind === "overdue" ? "bg-negative" : item.kind === "review" ? "bg-accent" : "bg-status-selection",
-                        )}
-                      />
-                      <span className="min-w-0 flex-1">
-                        <span className="block truncate text-[13px] font-medium text-ink">{item.label}</span>
-                        <span className="block truncate text-xs text-muted">{item.project.title}</span>
-                      </span>
-                      <ArrowUpRight className="mt-0.5 size-3.5 shrink-0 text-faint group-hover:text-ink" />
-                    </Link>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </Deck>
         </div>
 
         {/* The studio */}
         <section className={cn("relative order-1 flex min-h-[420px] flex-col overflow-hidden rounded-[20px] border border-line bg-surface lg:order-2", ROW_HEIGHT)}>
-          <div aria-hidden="true" className="pointer-events-none absolute inset-0 opacity-60 [background-image:linear-gradient(var(--rule)_1px,transparent_1px),linear-gradient(90deg,var(--rule)_1px,transparent_1px)] [background-size:44px_44px]" />
+          <div aria-hidden="true" className={GRID_BACKGROUND} />
           <div className="relative flex items-start justify-between gap-4 p-5">
             <div>
               <p className="font-mono text-[11px] uppercase tracking-[0.1em] text-faint">Studio floor</p>
@@ -258,51 +231,13 @@ export function OverviewScreen() {
       <div className="mt-4 grid gap-4 lg:grid-cols-3">
         <ActivityCard data={data.engagement} />
         <DeadlineCard deadlines={data.deadlines} />
-        <DeliveredCard data={data} counts={counts} />
+        <NeedsYouCard items={data.attention} />
       </div>
     </div>
   );
 }
 
-/**
- * One height for the left deck, the studio and the right deck on wide screens,
- * so the row reads as a single band; long decks scroll inside it.
- */
-const ROW_HEIGHT = "lg:h-[clamp(560px,calc(100dvh_-_150px),760px)]";
-
 // --- Pieces -----------------------------------------------------------------
-
-function StationChips({ active, counts, total, onSelect }: { active: number; counts: number[]; total: number; onSelect: (i: number) => void }) {
-  const strip = useRef<HTMLDivElement>(null);
-  const nudge = (dir: number) => strip.current?.scrollBy({ left: dir * 240, behavior: "smooth" });
-  return (
-    <div className="flex items-center justify-center gap-2">
-      <button type="button" onClick={() => nudge(-1)} aria-label="Scroll stages left" className="flex size-9 shrink-0 items-center justify-center rounded-[10px] border border-line bg-surface text-muted hover:text-ink md:hidden">
-        <ChevronLeft className="size-4" />
-      </button>
-     
-      <button type="button" onClick={() => nudge(1)} aria-label="Scroll stages right" className="flex size-9 shrink-0 items-center justify-center rounded-[10px] border border-line bg-surface text-muted hover:text-ink md:hidden">
-        <ChevronRight className="size-4" />
-      </button>
-    </div>
-  );
-}
-
-function Chip({ on, onClick, children }: { on: boolean; onClick: () => void; children: ReactNode }) {
-  return (
-    <button
-      type="button"
-      aria-pressed={on}
-      onClick={onClick}
-      className={cn(
-        "flex h-8 shrink-0 items-center gap-2 whitespace-nowrap rounded-[10px] px-3.5 text-[13px] font-semibold transition-colors",
-        on ? "bg-ink text-ground" : "text-muted hover:bg-raised hover:text-ink",
-      )}
-    >
-      {children}
-    </button>
-  );
-}
 
 function Studio({ active, counts, onSelect }: { active: number; counts: number[]; onSelect: (i: number) => void }) {
   const ref = useRef<HTMLDivElement>(null);
@@ -590,60 +525,35 @@ function DeadlineCard({ deadlines }: { deadlines: Overview["deadlines"] }) {
   );
 }
 
-function DeliveredCard({ data, counts }: { data: Overview; counts: number[] }) {
-  const total = Math.max(1, data.kpis.projects);
-  const delivered = counts[4];
-  const percent = Math.round((delivered / total) * 100);
+/** What's waiting on the photographer: overdue stages, selections to review, and the like. */
+function NeedsYouCard({ items }: { items: Overview["attention"] }) {
   return (
-    <BottomCard title="Delivery rate" className="text-start">
-      <div className="mt-4 flex flex-1 flex-col justify-between">
-        <div>
-          <p className="font-mono text-[2.5rem] font-medium leading-none tracking-[-0.04em] tabular">{percent}%</p>
-          <p className="mt-1 text-xs text-muted">
-            {count(delivered, "project")} delivered of {number(data.kpis.projects)}
-          </p>
-        </div>
-        <div>
-          <div className="mt-5 flex h-2.5 gap-[2px] overflow-hidden rounded-full bg-active" aria-hidden="true">
-            {STATIONS.map((station, i) =>
-              counts[i] ? <span key={station.label} style={{ flexGrow: counts[i], background: STUDIO_COLORS[station.color].r }} /> : null,
-            )}
-          </div>
-          <ul className="mt-3 grid grid-cols-3 gap-x-3 gap-y-1 text-[11px] text-muted">
-            {STATIONS.map((station, i) => (
-              <li key={station.label} className="flex items-center gap-1.5">
-                <span className="size-1.5 rounded-full" style={{ background: STUDIO_COLORS[station.color].r }} />
-                {station.label} <span className="font-mono text-ink">{counts[i]}</span>
-              </li>
-            ))}
-          </ul>
-          <Link href="/activity" className="mt-4 inline-block text-xs font-semibold text-ink underline underline-offset-4">
-            View activity
-          </Link>
-        </div>
-      </div>
+    <BottomCard title="Needs you" className="text-start">
+      <p className="mt-4 text-center font-mono text-[2.5rem] font-medium leading-none tracking-[-0.04em] tabular">{number(items.length)}</p>
+      <p className="mt-1 text-center text-xs text-muted">{items.length === 1 ? "thing waiting on you" : "things waiting on you"}</p>
+      {items.length === 0 ? (
+        <p className="m-auto pt-4 text-[13px] text-muted">All clear. Nothing is waiting on you.</p>
+      ) : (
+        <ul className="-mx-1 mt-4 max-h-[132px] space-y-0.5 overflow-y-auto">
+          {items.map((item, index) => (
+            <li key={`${item.project.id}-${item.kind}-${index}`}>
+              <Link href={`/projects/${item.project.id}?tab=${item.tab}`} className="group flex items-start gap-2.5 rounded-[8px] px-1 py-1.5 hover:bg-raised">
+                <span
+                  className={cn(
+                    "mt-1.5 size-1.5 shrink-0 rounded-full",
+                    item.kind === "overdue" ? "bg-negative" : item.kind === "review" ? "bg-accent" : "bg-status-selection",
+                  )}
+                />
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-[13px] font-medium text-ink">{item.label}</span>
+                  <span className="block truncate text-xs text-muted">{item.project.title}</span>
+                </span>
+                <ArrowUpRight className="mt-0.5 size-3.5 shrink-0 text-faint group-hover:text-ink" />
+              </Link>
+            </li>
+          ))}
+        </ul>
+      )}
     </BottomCard>
   );
 }
-
-function OverviewSkeleton() {
-  return (
-    <div className="px-4 pb-10 sm:px-6 lg:px-10">
-      <Skeleton className="mx-auto h-10 w-[640px] max-w-full rounded-[14px]" />
-      <div className="mt-4 grid gap-4 lg:grid-cols-[280px_minmax(0,1fr)] 2xl:grid-cols-[300px_minmax(0,1fr)_360px]">
-        <div className="space-y-4">
-          <Skeleton className="h-52 w-full rounded-[16px]" />
-          <Skeleton className="h-44 w-full rounded-[16px]" />
-        </div>
-        <Skeleton className="h-[520px] w-full rounded-[20px]" />
-        <Skeleton className="hidden h-[520px] w-full rounded-[16px] 2xl:block" />
-      </div>
-      <div className="mt-4 grid gap-4 lg:grid-cols-3">
-        {[0, 1, 2].map((i) => (
-          <Skeleton key={i} className="h-64 w-full rounded-[20px]" />
-        ))}
-      </div>
-    </div>
-  );
-}
-

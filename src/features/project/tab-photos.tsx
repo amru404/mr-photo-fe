@@ -4,10 +4,12 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ChevronLeft, FolderPlus, Heart, ImageIcon, LayoutGrid, MessageSquare, RefreshCw, RectangleHorizontal, Star } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { EmptyState, LoadError } from "@/components/ui/notice";
+import { Dialog } from "@/components/ui/dialog";
+import { Field, Input } from "@/components/ui/field";
+import { EmptyState, LoadError, Notice } from "@/components/ui/notice";
 import { Pagination } from "@/components/ui/pagination";
 import { Segmented } from "@/components/ui/segmented";
-import { Skeleton } from "@/components/ui/spinner";
+import { PhotoGridSkeleton } from "@/components/page-skeletons";
 import { useToast } from "@/components/ui/feedback";
 import { api, ApiError, query } from "@/lib/api";
 import { cn } from "@/lib/cn";
@@ -15,6 +17,7 @@ import { count, longDate, number, plural, relative } from "@/lib/format";
 import type { Comment, PhotoTab, ProjectDetail, SelectionsTab } from "@/lib/types";
 import { useQueryState } from "@/lib/use-query-state";
 import { frame, PhotoViewer } from "./photo-viewer";
+import { Lightbox } from "@/features/gallery/lightbox";
 import { TabToolbar } from "./toolbar-slot";
 import { FolderLinkField, FolderSkeleton, ShareWithNotice } from "@/features/projects/drive-folder";
 import { useOptions } from "@/features/projects/use-options";
@@ -30,16 +33,14 @@ export function PhotosTab({ project }: { project: ProjectDetail }) {
   return project.has_photos_folder ? <PhotoGrid project={project} /> : <ConnectFolderPanel project={project} />;
 }
 
-function ConnectFolderPanel({ project }: { project: ProjectDetail }) {
+/** `POST /projects/{id}/drive-folder`: connects the proofing folder, or swaps it, then starts a sync. */
+function useConnectPhotosFolder(project: ProjectDetail) {
   const client = useQueryClient();
-  const options = useOptions();
   const setProject = useSetProject(project.id);
-  const toast = useToast();
-  const [link, setLink] = useState("");
   const [error, setError] = useState<string>();
   const [connecting, setConnecting] = useState(false);
 
-  async function connect() {
+  async function connect(link: string): Promise<boolean> {
     setConnecting(true);
     setError(undefined);
     try {
@@ -49,12 +50,85 @@ function ConnectFolderPanel({ project }: { project: ProjectDetail }) {
       client.invalidateQueries({ queryKey: ["projects"] });
       client.invalidateQueries({ queryKey: ["overview"] });
       client.invalidateQueries({ queryKey: ["schedule"] });
-      toast("Drive folder connected. Importing photos…");
+      return true;
     } catch (failure) {
       setError(failure instanceof ApiError ? (failure.field("drive_folder_link") ?? failure.message) : "Couldn't connect the folder.");
+      return false;
     } finally {
       setConnecting(false);
     }
+  }
+
+  return { connect, connecting, error };
+}
+
+/** Points an already-connected project at another Drive folder (wrong link, folder moved, new upload). */
+export function ChangeFolderDialog({ project, onClose }: { project: ProjectDetail; onClose: () => void }) {
+  const options = useOptions();
+  const toast = useToast();
+  const { connect, connecting, error } = useConnectPhotosFolder(project);
+  const [link, setLink] = useState(project.drive_folder_link ?? "");
+  const unchanged = link.trim() === "" || link.trim() === (project.drive_folder_link ?? "").trim();
+
+  async function save(event: React.FormEvent) {
+    event.preventDefault();
+    if (unchanged) return;
+    if (await connect(link)) {
+      toast("Drive folder changed. Syncing photos…");
+      onClose();
+    }
+  }
+
+  return (
+    <Dialog
+      open
+      onClose={onClose}
+      title="Change Drive folder"
+      description="Photos are re-imported from the new folder."
+      footer={
+        <>
+          <Button onClick={onClose} disabled={connecting}>
+            Cancel
+          </Button>
+          <Button variant="primary" type="submit" form="change-folder" loading={connecting} disabled={unchanged}>
+            {connecting ? "Connecting…" : "Change folder"}
+          </Button>
+        </>
+      }
+    >
+      <form id="change-folder" onSubmit={save} noValidate className="grid gap-4">
+        <ShareWithNotice email={options.data?.service_account_email} />
+        <Field label="Drive folder link" error={error}>
+          {(id) => (
+            <Input
+              id={id}
+              autoFocus
+              placeholder="https://drive.google.com/drive/folders/…"
+              value={link}
+              onChange={(event) => setLink(event.target.value)}
+              onFocus={(event) => event.target.select()}
+              invalid={!!error}
+            />
+          )}
+        </Field>
+        {project.counts.photos > 0 && (
+          <Notice tone="warning">
+            Photos that aren&rsquo;t in the new folder are removed from this project. Photos your client already picked or commented on are kept.
+          </Notice>
+        )}
+      </form>
+    </Dialog>
+  );
+}
+
+function ConnectFolderPanel({ project }: { project: ProjectDetail }) {
+  const options = useOptions();
+  const toast = useToast();
+  const [link, setLink] = useState("");
+  const { connect: post, connecting, error } = useConnectPhotosFolder(project);
+
+  async function connect() {
+    if (await post(link)) toast("Drive folder connected. Importing photos…");
   }
 
   return (
@@ -131,44 +205,44 @@ function PhotoGrid({ project }: { project: ProjectDetail }) {
     client.invalidateQueries({ queryKey: projectKey(project.id) });
   }
 
-  // Double-clicking a grid tile shows that photo alone, fullscreen; ← → step through the page.
-  const screen = useRef<HTMLDivElement>(null);
+  // Double-clicking a grid tile opens it in an overlay; the chevrons (and ← →) carry on across pages.
   const [full, setFull] = useState<number | null>(null);
+  const fullEdge = useRef<"first" | "last" | null>(null);
   const pagePhotos = photos.data?.data;
 
-  function openFull(photoIndex: number) {
-    setFull(photoIndex);
-    screen.current?.requestFullscreen?.();
-  }
-
+  // Once the next/previous page has loaded, land on the frame at the edge we came from.
   useEffect(() => {
-    const sync = () => {
-      if (document.fullscreenElement !== screen.current) setFull(null);
-    };
-    document.addEventListener("fullscreenchange", sync);
-    return () => document.removeEventListener("fullscreenchange", sync);
-  }, []);
-
-  useEffect(() => {
-    if (full === null || !pagePhotos) return;
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key === "ArrowLeft") setFull((i) => (i === null ? i : Math.max(0, i - 1)));
-      else if (event.key === "ArrowRight") setFull((i) => (i === null ? i : Math.min(pagePhotos.length - 1, i + 1)));
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [full, pagePhotos]);
+    if (!list || !fullEdge.current) return;
+    setFull(list.length === 0 ? null : fullEdge.current === "first" ? 0 : list.length - 1);
+    fullEdge.current = null;
+  }, [list]);
 
   const fullPhoto = full !== null ? pagePhotos?.[full] : undefined;
 
   const setView = (next: View, photoId?: number) => url.set({ view: next, photo: photoId ?? null }, { defaults: { view: "grid" } });
 
-  if (photos.isPending) return <GridSkeleton />;
+  if (photos.isPending) return <PhotoGridSkeleton />;
   if (photos.isError) return <LoadError what="photos" onRetry={() => photos.refetch()} />;
 
   const data = photos.data;
   const isSyncing = data.syncing || syncing;
   const offset = (data.meta.current_page - 1) * PER_PAGE;
+
+  const turning = photos.isPlaceholderData;
+  const fullHasPrev = full !== null && (full > 0 || data.meta.current_page > 1);
+  const fullHasNext = full !== null && (full < data.data.length - 1 || data.meta.current_page < data.meta.last_page);
+
+  function fullStep(step: -1 | 1) {
+    if (full === null || turning) return;
+    const next = full + step;
+    if (next >= 0 && next < data.data.length) return setFull(next);
+    const target = data.meta.current_page + step;
+    if (target < 1 || target > data.meta.last_page) return;
+    fullEdge.current = step === 1 ? "first" : "last";
+    url.set({ page: target > 1 ? target : null });
+  }
+
+  const fullSrc = (photo: PhotoTab["data"][number] | undefined) => photo?.thumbnail_url ?? null;
 
   return (
     <div className="space-y-5">
@@ -280,10 +354,10 @@ function PhotoGrid({ project }: { project: ProjectDetail }) {
                 >
                   <button
                     type="button"
-                    onDoubleClick={() => openFull(photoIndex)}
-                    onKeyDown={(event) => event.key === "Enter" && openFull(photoIndex)}
+                    onDoubleClick={() => setFull(photoIndex)}
+                    onKeyDown={(event) => event.key === "Enter" && setFull(photoIndex)}
                     className="group relative block aspect-square w-full overflow-hidden rounded-[10px] bg-raised"
-                    title={`Double-click to view ${photo.filename} fullscreen`}
+                    title={`Double-click to view ${photo.filename} larger`}
                   >
                     {photo.thumbnail_url ? (
                       <img
@@ -340,29 +414,22 @@ function PhotoGrid({ project }: { project: ProjectDetail }) {
               <Pagination meta={data.meta} noun="photos" onPage={(next) => url.set({ page: next > 1 ? next : null })} />
             </div>
           </section>
-          <div ref={screen} className="hidden items-center justify-center bg-black [&:fullscreen]:flex">
-            {fullPhoto &&
-              (fullPhoto.thumbnail_url ? (
-                <img key={fullPhoto.id} src={fullPhoto.thumbnail_url} alt={fullPhoto.filename} className="max-h-full max-w-full select-none object-contain" draggable={false} />
-              ) : (
-                <p className="text-sm text-white/60">Preview is still being cached</p>
-              ))}
-          </div>
+          {fullPhoto && full !== null && (
+            <Lightbox
+              label={fullPhoto.filename}
+              alt={fullPhoto.filename}
+              position={`${frame(offset + full + 1, data.meta.total)} / ${number(data.meta.total)}`}
+              src={fullSrc(fullPhoto)}
+              loading={turning}
+              onClose={() => setFull(null)}
+              onPrevious={fullHasPrev ? () => fullStep(-1) : undefined}
+              onNext={fullHasNext ? () => fullStep(1) : undefined}
+              prefetch={[fullSrc(data.data[full - 1]), fullSrc(data.data[full + 1])]}
+              footer={null}
+            />
+          )}
         </>
       )}
-    </div>
-  );
-}
-
-function GridSkeleton() {
-  return (
-    <div className="grid grid-cols-2 gap-3 rounded-card border border-line bg-surface p-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-8">
-      {Array.from({ length: 16 }, (_, index) => (
-        <div key={index} className="rounded-card border border-line bg-surface p-1.5">
-          <Skeleton className="aspect-square w-full rounded-[10px]" />
-          <Skeleton className="mx-1 mb-0.5 mt-2 h-3 w-2/3" />
-        </div>
-      ))}
     </div>
   );
 }

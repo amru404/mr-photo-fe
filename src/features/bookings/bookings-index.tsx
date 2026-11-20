@@ -6,7 +6,8 @@ import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { ArrowUpRight, Check, Copy, Link2, RefreshCw } from "lucide-react";
 import { Button, ButtonLink } from "@/components/ui/button";
 import { EmptyState, LoadError } from "@/components/ui/notice";
-import { Skeleton, Spinner } from "@/components/ui/spinner";
+import { Spinner } from "@/components/ui/spinner";
+import { BOOKING_COLUMNS as COLUMNS, BookingRowsSkeleton, PAGE } from "@/components/page-skeletons";
 import { TABLE_HEAD } from "@/components/ui/table";
 import { cn } from "@/lib/cn";
 import { count, relative } from "@/lib/format";
@@ -30,8 +31,6 @@ const FILTERS: { value: BookingFilter; label: string; heading: string }[] = [
   { value: "declined", label: "Declined", heading: "Declined requests" },
   { value: "all", label: "All", heading: "Every booking request" },
 ];
-
-const COLUMNS = "md:grid-cols-[minmax(0,1.4fr)_120px_minmax(0,1fr)_minmax(0,1fr)_150px_190px]";
 
 function isFilter(value: string): value is BookingFilter {
   return FILTERS.some((filter) => filter.value === value);
@@ -65,7 +64,7 @@ export function BookingsIndex() {
   const heading = FILTERS.find((filter) => filter.value === status)!.heading;
 
   return (
-    <div className="px-4 pb-10 pt-5 sm:px-6 lg:px-10">
+    <div className={PAGE}>
       {/* Toolbar: status chips like the Projects index. */}
       <div className="no-scrollbar overflow-x-auto">
         <div role="group" aria-label="Filter by status" className="inline-flex items-center gap-1 rounded-[12px] border border-line bg-surface p-1">
@@ -92,7 +91,7 @@ export function BookingsIndex() {
         </header>
 
         {list.isPending ? (
-          <RowsSkeleton />
+          <BookingRowsSkeleton />
         ) : list.isError ? (
           <div className="p-4">
             <LoadError what="your booking requests" onRetry={() => list.refetch()} />
@@ -264,22 +263,5 @@ function EmptyList({ status }: { status: BookingFilter }) {
     <EmptyState title={status === "pending" ? "No requests waiting" : "No booking requests yet"} action={share}>
       Share your booking link. When someone asks for a shoot, it lands here and on your schedule.
     </EmptyState>
-  );
-}
-
-function RowsSkeleton() {
-  return (
-    <ul className="divide-y divide-rule">
-      {Array.from({ length: 6 }, (_, index) => (
-        <li key={index} className="flex items-center gap-4 px-5 py-3.5">
-          <div className="flex-1">
-            <Skeleton className="h-4 w-48 max-w-full" />
-            <Skeleton className="mt-2 h-3 w-32" />
-          </div>
-          <Skeleton className="hidden h-5 w-28 md:block" />
-          <Skeleton className="h-8 w-36" />
-        </li>
-      ))}
-    </ul>
   );
 }

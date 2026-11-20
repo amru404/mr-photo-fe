@@ -7,7 +7,7 @@ import { Pencil, Plus, Search, Trash2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useConfirm, useToast } from "@/components/ui/feedback";
 import { EmptyState, LoadError } from "@/components/ui/notice";
-import { Skeleton } from "@/components/ui/spinner";
+import { CLIENT_COLUMNS as COLUMNS, ClientRowsSkeleton, PAGE } from "@/components/page-skeletons";
 import { RowAction, SortHeader, TABLE_HEAD, type SortState } from "@/components/ui/table";
 import { api, ApiError, query } from "@/lib/api";
 import { cn } from "@/lib/cn";
@@ -18,8 +18,6 @@ import { useTitle } from "@/lib/use-title";
 import { Pager } from "@/features/projects/projects-index";
 import { ClientFormDialog } from "./client-form-dialog";
 import { useInvalidateClients } from "./use-clients";
-
-const COLUMNS = "md:grid-cols-[36px_minmax(0,1.5fr)_minmax(0,1fr)_96px_140px_84px]";
 
 export function ClientsIndex() {
   useTitle("Clients");
@@ -50,7 +48,7 @@ export function ClientsIndex() {
   });
 
   return (
-    <div className="px-4 pb-10 pt-5 sm:px-6 lg:px-10">
+    <div className={PAGE}>
       {/* Toolbar: search, then the primary action. */}
       <div className="flex items-center justify-end gap-2">
         <label className="relative flex h-[42px] min-w-0 flex-1 items-center rounded-[12px] border border-line bg-surface sm:w-80 sm:flex-none">
@@ -99,7 +97,7 @@ export function ClientsIndex() {
         </header>
 
         {list.isPending ? (
-          <RowsSkeleton />
+          <ClientRowsSkeleton />
         ) : list.isError ? (
           <div className="p-4">
             <LoadError what="your clients" onRetry={() => list.refetch()} />
@@ -207,21 +205,5 @@ function ClientRow({ client, onEdit }: { client: Client; onEdit: () => void }) {
         </RowAction>
       </span>
     </li>
-  );
-}
-
-function RowsSkeleton() {
-  return (
-    <ul className="divide-y divide-rule">
-      {Array.from({ length: 6 }, (_, index) => (
-        <li key={index} className="flex items-center gap-4 px-5 py-3.5">
-          <Skeleton className="size-9 rounded-full" />
-          <div className="flex-1">
-            <Skeleton className="h-4 w-48 max-w-full" />
-            <Skeleton className="mt-2 h-3 w-32" />
-          </div>
-        </li>
-      ))}
-    </ul>
   );
 }

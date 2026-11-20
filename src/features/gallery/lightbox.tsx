@@ -63,14 +63,15 @@ export function Lightbox({
   return (
     <div role="dialog" aria-modal="true" aria-label={alt} className="fixed inset-0 z-50 flex h-dvh flex-col bg-viewer text-viewer-ink">
       <div className="flex items-center gap-2 px-2 pt-[env(safe-area-inset-top)]">
-        <button type="button" onClick={onClose} aria-label="Close" className="flex size-12 items-center justify-center rounded-full hover:bg-white/10">
-          <X className="size-6" />
-        </button>
+        
         <div className="min-w-0 flex-1 text-center">
           <p className="font-mono text-[13px] font-medium tabular">{position}</p>
           <p className="truncate font-mono text-[11px] text-viewer-muted">{label}</p>
         </div>
         <span className="size-12" />
+        <button type="button" onClick={onClose} aria-label="Close" className="flex size-12 items-center justify-center rounded-full hover:bg-white/10">
+          <X className="size-6" />
+        </button>
       </div>
 
       <div

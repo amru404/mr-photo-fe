@@ -7,7 +7,7 @@ import { ArrowRight, ArrowUpRight, Camera, GripVertical, Link2, MoreHorizontal }
 import { useToast } from "@/components/ui/feedback";
 import { LoadError } from "@/components/ui/notice";
 import { PaymentBadge } from "@/components/ui/payment";
-import { Skeleton } from "@/components/ui/spinner";
+import { BoardSkeleton } from "@/components/page-skeletons";
 import { api, ApiError } from "@/lib/api";
 import { cn } from "@/lib/cn";
 import { STATUS_TONE } from "@/lib/status-tone";
@@ -353,31 +353,5 @@ function CardMenu({ event, moves, onMove }: { event: ScheduleEvent; moves: MoveO
         </div>
       )}
     </>
-  );
-}
-
-function BoardSkeleton() {
-  return (
-    <div className="mt-4 grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-      {[0, 1, 2, 3].map((column) => (
-        <div key={column} className="rounded-card border border-line bg-surface">
-          <div className="flex items-center justify-between border-b border-rule px-4 py-3">
-            <Skeleton className="h-4 w-24" />
-            <Skeleton className="h-5 w-9" />
-          </div>
-          <div className="space-y-2 p-3">
-            {[0, 1, 2].map((card) => (
-              <div key={card} className="flex gap-2 rounded-[12px] border border-rule p-2.5">
-                <Skeleton className="size-12 rounded-[8px]" />
-                <div className="flex-1">
-                  <Skeleton className="h-4 w-3/4" />
-                  <Skeleton className="mt-1.5 h-3 w-1/2" />
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      ))}
-    </div>
   );
 }

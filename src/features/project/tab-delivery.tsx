@@ -189,14 +189,14 @@ export function DeliveryTab({ project, onOpenSettings }: { project: ProjectDetai
         </Step>
       </ol>
 
-      <aside className="space-y-6">
-        <section>
-          <h2 className="deck-title mb-2.5">Client downloads</h2>
-          <div className="overflow-hidden rounded-card border border-line bg-surface">
+      <aside className="space-y-4">
+        <section className="overflow-hidden rounded-card border border-line bg-surface">
+          <h2 className="deck-title px-4 pt-4">Client downloads</h2>
+          <div>
             {data.exports.length === 0 ? (
-              <p className="px-4 py-5 text-sm text-muted">No ZIP downloads requested yet.</p>
+              <p className="px-4 pb-4 pt-3 text-sm text-muted">No ZIP downloads requested yet.</p>
             ) : (
-              <ul className="divide-y divide-rule">
+              <ul className="mt-3 divide-y divide-rule border-t border-rule">
                 {data.exports.map((item) => (
                   <li key={item.id} className="flex flex-wrap items-center justify-between gap-2 px-4 py-3 text-sm">
                     <div>
