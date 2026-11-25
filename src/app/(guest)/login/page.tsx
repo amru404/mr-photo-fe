@@ -38,14 +38,6 @@ export default function LoginPage() {
     <AuthShell
       title="Sign in"
       description="Your projects, client selections and deliveries."
-      footer={
-        <>
-          New here?{" "}
-          <Link href="/register" className="font-medium text-ink underline-offset-4 hover:underline">
-            Create an account
-          </Link>
-        </>
-      }
     >
       {status && <Notice tone="success" className="mb-6">{status}</Notice>}
 
